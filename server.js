@@ -14,7 +14,8 @@ function fallbackRegexReview(diffText) {
   let currentFile = 'unknown';
   let lineNo = 0;
 
-  for (const rawLine of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const rawLine = lines[lineIndex];
     if (rawLine.startsWith('+++ b/')) {
       currentFile = rawLine.replace('+++ b/', '').trim();
 
@@ -122,18 +123,24 @@ function fallbackRegexReview(diffText) {
         });
       }
 
-      // 7. C/C++ Malloc without Null Check
-      if (/\bmalloc\s*\(/i.test(code) && !/if\s*\(!/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'WARNING',
-          owasp: 'A05:2021 - Security Misconfiguration',
-          category: 'Memory Safety',
-          issue: 'Dynamic allocation via malloc() without adjacent NULL validation.',
-          fix: 'Verify pointer is non-null before dereferencing to prevent SIGSEGV crashes.',
-          suggestedCode: 'if (!new_node) return false;'
-        });
+      // 7. C/C++ Malloc without Null Check (inspects current + next line)
+      if (/\bmalloc\s*\(/i.test(code)) {
+        const nextRaw = lines[lineIndex + 1] || '';
+        const hasNextCheck = /if\s*\(!/i.test(nextRaw) || /==\s*NULL/i.test(nextRaw);
+        const hasSameLineCheck = /if\s*\(!/i.test(code);
+
+        if (!hasNextCheck && !hasSameLineCheck) {
+          findings.push({
+            file: currentFile,
+            line: lineNo,
+            severity: 'WARNING',
+            owasp: 'A05:2021 - Security Misconfiguration',
+            category: 'Memory Safety',
+            issue: 'Dynamic allocation via malloc() without adjacent NULL validation.',
+            fix: 'Verify pointer is non-null before dereferencing to prevent SIGSEGV crashes.',
+            suggestedCode: 'if (!ptr) return false;'
+          });
+        }
       }
 
       // 8. C/C++ Free without Null Reset (Dangling Pointer / Double Free Hazard)
