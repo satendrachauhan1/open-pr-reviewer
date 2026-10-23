@@ -14,12 +14,13 @@ function fallbackRegexReview(diffText) {
   let currentFile = 'unknown';
   let lineNo = 0;
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const rawLine = lines[lineIndex];
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+
     if (rawLine.startsWith('+++ b/')) {
       currentFile = rawLine.replace('+++ b/', '').trim();
 
-      // Check for sensitive files committed to git
+      // Sensitive file tracking
       if (/(\.env|id_rsa|\.pem|\.pfx|wp-config\.php|credentials\.json)$/i.test(currentFile)) {
         findings.push({
           file: currentFile,
@@ -123,24 +124,18 @@ function fallbackRegexReview(diffText) {
         });
       }
 
-      // 7. C/C++ Malloc without Null Check (inspects current + next line)
-      if (/\bmalloc\s*\(/i.test(code)) {
-        const nextRaw = lines[lineIndex + 1] || '';
-        const hasNextCheck = /if\s*\(!/i.test(nextRaw) || /==\s*NULL/i.test(nextRaw);
-        const hasSameLineCheck = /if\s*\(!/i.test(code);
-
-        if (!hasNextCheck && !hasSameLineCheck) {
-          findings.push({
-            file: currentFile,
-            line: lineNo,
-            severity: 'WARNING',
-            owasp: 'A05:2021 - Security Misconfiguration',
-            category: 'Memory Safety',
-            issue: 'Dynamic allocation via malloc() without adjacent NULL validation.',
-            fix: 'Verify pointer is non-null before dereferencing to prevent SIGSEGV crashes.',
-            suggestedCode: 'if (!ptr) return false;'
-          });
-        }
+      // 7. Dangerous Zero-Byte Allocation
+      if (/\bmalloc\s*\(\s*0\s*\)/i.test(code)) {
+        findings.push({
+          file: currentFile,
+          line: lineNo,
+          severity: 'WARNING',
+          owasp: 'A05:2021 - Security Misconfiguration',
+          category: 'Memory Safety',
+          issue: 'Zero-byte allocation detected via malloc(0).',
+          fix: 'Ensure allocation size is strictly greater than 0 before allocating.',
+          suggestedCode: 'if (size > 0) ptr = malloc(size);'
+        });
       }
 
       // 8. C/C++ Free without Null Reset (Dangling Pointer / Double Free Hazard)
@@ -322,7 +317,7 @@ ${diff}`;
   return res.json({ source: 'open-source heuristic engine', reviews: fallbackReviews, metrics });
 });
 
-// Catch-all route safe for Express v5
+// Safe fallback for Express v5
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
