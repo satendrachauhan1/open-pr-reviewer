@@ -7,12 +7,31 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Heuristic & Static Security Engine (Web, Cloud & C/C++ Memory Safety)
+// Heuristic & Static Security Engine (Web, Cloud, C/C++ Memory Safety & Input Validation)
 function fallbackRegexReview(diffText) {
   const findings = [];
   const lines = diffText.split('\n');
-  let currentFile = 'unknown';
+  let currentFile = 'snippet.txt';
   let lineNo = 0;
+
+  // 1. Check if input is in Git Unified Diff format or raw code
+  const isDiff = lines.some(l => l.startsWith('diff --git') || l.startsWith('+++ ') || l.startsWith('@@ '));
+
+  // 2. Reject random gibberish / invalid non-code text
+  const trimmed = diffText.trim();
+  if (trimmed.length > 0 && !isDiff && !/[;{}()=<>\[\]\/#]/.test(trimmed)) {
+    findings.push({
+      file: 'input',
+      line: 1,
+      severity: 'WARNING',
+      owasp: 'A04:2021 - Insecure Design',
+      category: 'Input Validation',
+      issue: 'Unrecognized input format (neither a valid git diff nor structured source code).',
+      fix: 'Paste a unified git diff (e.g. from `git diff`) or a valid C/C++/JS source snippet.',
+      suggestedCode: '// Paste valid unified diff starting with "diff --git" or code containing valid statements'
+    });
+    return findings;
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
@@ -20,7 +39,7 @@ function fallbackRegexReview(diffText) {
     if (rawLine.startsWith('+++ b/')) {
       currentFile = rawLine.replace('+++ b/', '').trim();
 
-      // Sensitive file tracking
+      // Check for sensitive files committed to repository
       if (/(\.env|id_rsa|\.pem|\.pfx|wp-config\.php|credentials\.json)$/i.test(currentFile)) {
         findings.push({
           file: currentFile,
@@ -33,185 +52,201 @@ function fallbackRegexReview(diffText) {
           suggestedCode: '# Added to .gitignore\n' + path.basename(currentFile)
         });
       }
+      continue;
     } else if (rawLine.startsWith('@@')) {
       const match = rawLine.match(/\+(\d+)/);
       if (match) lineNo = parseInt(match[1], 10) - 1;
-    } else if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+      continue;
+    }
+
+    // Determine target code line:
+    // If it is a git diff, inspect only added lines (+)
+    // If it is raw pasted code, inspect every line
+    let code = null;
+    if (isDiff) {
+      if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+        lineNo++;
+        code = rawLine.slice(1);
+      } else if (!rawLine.startsWith('-')) {
+        lineNo++;
+      }
+    } else {
       lineNo++;
-      const code = rawLine.slice(1);
+      code = rawLine;
+    }
 
-      // 1. Secrets & Credentials
-      if (/(api_?key|secret|password|bearer|auth_token)\s*=\s*['"][A-Za-z0-9_\-\.]{8,}['"]/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'CRITICAL',
-          owasp: 'A07:2021 - Identification & Auth Failures',
-          category: 'Secrets & Auth',
-          issue: 'Hardcoded secret or credential token exposed in diff.',
-          fix: 'Migrate secret to environment variables or a secret vault.',
-          suggestedCode: code.replace(/=\s*['"][A-Za-z0-9_\-\.]+['"]/, '= process.env.API_SECRET || ""')
-        });
-      }
+    if (!code || !code.trim()) continue;
 
-      // 2. Private Cryptographic Keys
-      if (/-----BEGIN[ A-Z_-]*KEY/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'CRITICAL',
-          owasp: 'A02:2021 - Cryptographic Failures',
-          category: 'Secrets & Auth',
-          issue: 'Private cryptographic key header committed directly into code.',
-          fix: 'Revoke and rotate this key immediately; store in cloud secret vault.',
-          suggestedCode: '// Secret key loaded from secure secret manager at runtime\nconst privateKey = await secretManager.getSecret("APP_PRIVATE_KEY");'
-        });
-      }
+    // 1. Secrets & Credentials
+    if (/(api_?key|secret|password|bearer|auth_token)\s*=\s*['"][A-Za-z0-9_\-\.]{8,}['"]/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'CRITICAL',
+        owasp: 'A07:2021 - Identification & Auth Failures',
+        category: 'Secrets & Auth',
+        issue: 'Hardcoded secret or credential token exposed in code.',
+        fix: 'Migrate secret to environment variables or a secret vault.',
+        suggestedCode: code.replace(/=\s*['"][A-Za-z0-9_\-\.]+['"]/, '= process.env.API_SECRET || ""')
+      });
+    }
 
-      // 3. AWS Access Key IDs
-      if (/(AKIA[0-9A-Z]{16})/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'CRITICAL',
-          owasp: 'A07:2021 - Identification & Auth Failures',
-          category: 'Secrets & Auth',
-          issue: 'Exposed AWS Access Key ID detected.',
-          fix: 'Use AWS IAM Roles or AWS Secrets Manager instead of inline keys.',
-          suggestedCode: code.replace(/AKIA[0-9A-Z]{16}/, 'process.env.AWS_ACCESS_KEY_ID')
-        });
-      }
+    // 2. Private Cryptographic Keys
+    if (/-----BEGIN[ A-Z_-]*KEY/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'CRITICAL',
+        owasp: 'A02:2021 - Cryptographic Failures',
+        category: 'Secrets & Auth',
+        issue: 'Private cryptographic key header committed directly into code.',
+        fix: 'Revoke and rotate this key immediately; store in cloud secret vault.',
+        suggestedCode: '// Secret key loaded from secure secret manager at runtime\nconst privateKey = await secretManager.getSecret("APP_PRIVATE_KEY");'
+      });
+    }
 
-      // 4. SQL Injection
-      if (/(SELECT|INSERT|UPDATE|DELETE).*\$\{.*\}|(SELECT|INSERT|UPDATE|DELETE).*f['"]|(SELECT|INSERT|UPDATE|DELETE).*(\+\s*['"]|\+\s*[a-zA-Z0-9_]+)/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'CRITICAL',
-          owasp: 'A03:2021 - Injection',
-          category: 'Injections',
-          issue: 'Direct string concatenation in SQL statement invites SQL injection.',
-          fix: 'Use parameterized queries ($1, ? placeholders) or ORM abstraction.',
-          suggestedCode: 'return db.query("SELECT * FROM users WHERE email = $1", [userEmail]);'
-        });
-      }
+    // 3. AWS Access Key IDs
+    if (/(AKIA[0-9A-Z]{16})/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'CRITICAL',
+        owasp: 'A07:2021 - Identification & Auth Failures',
+        category: 'Secrets & Auth',
+        issue: 'Exposed AWS Access Key ID detected.',
+        fix: 'Use AWS IAM Roles or AWS Secrets Manager instead of inline keys.',
+        suggestedCode: code.replace(/AKIA[0-9A-Z]{16}/, 'process.env.AWS_ACCESS_KEY_ID')
+      });
+    }
 
-      // 5. Dynamic Code Execution / Eval
-      if (/\beval\(|\bnew Function\(|setTimeout\([^,]+['"][^'"]+['"]/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'CRITICAL',
-          owasp: 'A03:2021 - Injection',
-          category: 'Injections',
-          issue: 'Dynamic code execution via eval/Function allows Remote Code Execution (RCE).',
-          fix: 'Refactor using static parsing or safe functional strategies.',
-          suggestedCode: '// Replaced dangerous eval with structured static mapper\nconst safeResult = JSON.parse(inputData);'
-        });
-      }
+    // 4. SQL Injection
+    if (/(SELECT|INSERT|UPDATE|DELETE).*\$\{.*\}|(SELECT|INSERT|UPDATE|DELETE).*f['"]|(SELECT|INSERT|UPDATE|DELETE).*(\+\s*['"]|\+\s*[a-zA-Z0-9_]+)/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'CRITICAL',
+        owasp: 'A03:2021 - Injection',
+        category: 'Injections',
+        issue: 'Direct string concatenation in SQL statement invites SQL injection.',
+        fix: 'Use parameterized queries ($1, ? placeholders) or ORM abstraction.',
+        suggestedCode: 'return db.query("SELECT * FROM users WHERE email = $1", [userEmail]);'
+      });
+    }
 
-      // 6. Dangerous / Unbounded C String Functions (Buffer Overflow)
-      if (/\b(gets|strcpy|strcat|sprintf)\s*\(/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'CRITICAL',
-          owasp: 'A03:2021 - Injection',
-          category: 'Memory Safety',
-          issue: 'Dangerous unbounded C string function detected (buffer overflow risk).',
-          fix: 'Replace with bounded variants (fgets, strncpy, strncat, snprintf).',
-          suggestedCode: code.replace(/sprintf\s*\(([^,]+),/g, 'snprintf($1, sizeof($1),')
-        });
-      }
+    // 5. Dynamic Code Execution / Eval
+    if (/\beval\(|\bnew Function\(|setTimeout\([^,]+['"][^'"]+['"]/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'CRITICAL',
+        owasp: 'A03:2021 - Injection',
+        category: 'Injections',
+        issue: 'Dynamic code execution via eval/Function allows Remote Code Execution (RCE).',
+        fix: 'Refactor using static parsing or safe functional strategies.',
+        suggestedCode: '// Replaced dangerous eval with structured static mapper\nconst safeResult = JSON.parse(inputData);'
+      });
+    }
 
-      // 7. Dangerous Zero-Byte Allocation
-      if (/\bmalloc\s*\(\s*0\s*\)/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'WARNING',
-          owasp: 'A05:2021 - Security Misconfiguration',
-          category: 'Memory Safety',
-          issue: 'Zero-byte allocation detected via malloc(0).',
-          fix: 'Ensure allocation size is strictly greater than 0 before allocating.',
-          suggestedCode: 'if (size > 0) ptr = malloc(size);'
-        });
-      }
+    // 6. Dangerous / Unbounded C String Functions (Buffer Overflow)
+    if (/\b(gets|strcpy|strcat|sprintf)\s*\(/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'CRITICAL',
+        owasp: 'A03:2021 - Injection',
+        category: 'Memory Safety',
+        issue: 'Dangerous unbounded C string function detected (buffer overflow risk).',
+        fix: 'Replace with bounded variants (fgets, strncpy, strncat, snprintf).',
+        suggestedCode: code.replace(/sprintf\s*\(([^,]+),/g, 'snprintf($1, sizeof($1),')
+      });
+    }
 
-      // 8. C/C++ Free without Null Reset (Dangling Pointer / Double Free Hazard)
-      if (/\bfree\s*\(\s*([a-zA-Z0-9_]+)\s*\)/i.test(code)) {
-        const ptrMatch = code.match(/\bfree\s*\(\s*([a-zA-Z0-9_]+)\s*\)/);
-        if (ptrMatch) {
-          findings.push({
-            file: currentFile,
-            line: lineNo,
-            severity: 'SUGGESTION',
-            owasp: 'A04:2021 - Insecure Design',
-            category: 'Memory Safety',
-            issue: `Pointer "${ptrMatch[1]}" freed without setting to NULL (dangling pointer hazard).`,
-            fix: `Assign "${ptrMatch[1]} = NULL;" immediately after free().`,
-            suggestedCode: `free(${ptrMatch[1]});\n${ptrMatch[1]} = NULL;`
-          });
-        }
-      }
+    // 7. Dangerous Zero-Byte Allocation
+    if (/\bmalloc\s*\(\s*0\s*\)/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'WARNING',
+        owasp: 'A05:2021 - Security Misconfiguration',
+        category: 'Memory Safety',
+        issue: 'Zero-byte allocation detected via malloc(0).',
+        fix: 'Ensure allocation size is strictly greater than 0 before allocating.',
+        suggestedCode: 'if (size > 0) ptr = malloc(size);'
+      });
+    }
 
-      // 9. Cross-Site Scripting (XSS)
-      if (/\.innerHTML\s*=|\bdangerouslySetInnerHTML/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'WARNING',
-          owasp: 'A03:2021 - Injection',
-          category: 'XSS & Client',
-          issue: 'Unescaped innerHTML assignment introduces Cross-Site Scripting (XSS).',
-          fix: 'Use textContent, innerText, or sanitize inputs with DOMPurify.',
-          suggestedCode: code.replace(/\.innerHTML\s*=/, '.textContent =')
-        });
-      }
-
-      // 10. CORS Wildcard
-      if (/Access-Control-Allow-Origin['"]?\s*,\s*['"]\*/i.test(code)) {
-        findings.push({
-          file: currentFile,
-          line: lineNo,
-          severity: 'WARNING',
-          owasp: 'A05:2021 - Security Misconfiguration',
-          category: 'Configuration',
-          issue: 'Wildcard CORS origin (*) detected. Permits arbitrary origin access.',
-          fix: 'Restrict origin to trusted production domains.',
-          suggestedCode: "res.setHeader('Access-Control-Allow-Origin', process.env.TRUSTED_ORIGIN || 'https://example.com');"
-        });
-      }
-
-      // 11. Debug Logging Artifacts
-      if (/console\.(log|debug|trace)\(|DEBUG\s*=\s*true/i.test(code)) {
+    // 8. C/C++ Free without Null Reset (Dangling Pointer / Double Free Hazard)
+    if (/\bfree\s*\(\s*([a-zA-Z0-9_]+)\s*\)/i.test(code)) {
+      const ptrMatch = code.match(/\bfree\s*\(\s*([a-zA-Z0-9_]+)\s*\)/);
+      if (ptrMatch) {
         findings.push({
           file: currentFile,
           line: lineNo,
           severity: 'SUGGESTION',
-          owasp: 'A09:2021 - Logging & Monitoring Failures',
-          category: 'Code Smells',
-          issue: 'Production debug logging statement left active in PR diff.',
-          fix: 'Remove logging output or guard with environment checks.',
-          suggestedCode: '// Removed debugging artifact before merge'
+          owasp: 'A04:2021 - Insecure Design',
+          category: 'Memory Safety',
+          issue: `Pointer "${ptrMatch[1]}" freed without setting to NULL (dangling pointer hazard).`,
+          fix: `Assign "${ptrMatch[1]} = NULL;" immediately after free().`,
+          suggestedCode: `free(${ptrMatch[1]});\n${ptrMatch[1]} = NULL;`
         });
       }
-      // 12. Syntax check: Unclosed string literal
-const quoteCount = (code.match(/(?<!\\)"/g) || []).length;
-if (quoteCount % 2 !== 0) {
-  findings.push({
-    file: currentFile,
-    line: lineNo,
-    severity: 'WARNING',
-    owasp: 'A04:2021 - Insecure Design',
-    category: 'Syntax & Build',
-    issue: 'Unclosed string literal detected (syntax / build failure).',
-    fix: 'Close string quotes with matching `"` and terminate with a semicolon.',
-    suggestedCode: code + '";'
-  });
-}
-    } else if (!rawLine.startsWith('-')) {
-      lineNo++;
+    }
+
+    // 9. Syntax Check: Unclosed string literal
+    const quoteMatches = code.match(/(?<!\\)"/g) || [];
+    if (quoteMatches.length % 2 !== 0 && !code.trim().startsWith('//') && !code.trim().startsWith('/*')) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'WARNING',
+        owasp: 'A04:2021 - Insecure Design',
+        category: 'Syntax & Build',
+        issue: 'Unclosed string literal detected.',
+        fix: 'Close string quotes with matching `"` and terminate statement.',
+        suggestedCode: code + '";'
+      });
+    }
+
+    // 10. Cross-Site Scripting (XSS)
+    if (/\.innerHTML\s*=|\bdangerouslySetInnerHTML/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'WARNING',
+        owasp: 'A03:2021 - Injection',
+        category: 'XSS & Client',
+        issue: 'Unescaped innerHTML assignment introduces Cross-Site Scripting (XSS).',
+        fix: 'Use textContent, innerText, or sanitize inputs with DOMPurify.',
+        suggestedCode: code.replace(/\.innerHTML\s*=/, '.textContent =')
+      });
+    }
+
+    // 11. CORS Wildcard
+    if (/Access-Control-Allow-Origin['"]?\s*,\s*['"]\*/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'WARNING',
+        owasp: 'A05:2021 - Security Misconfiguration',
+        category: 'Configuration',
+        issue: 'Wildcard CORS origin (*) detected. Permits arbitrary origin access.',
+        fix: 'Restrict origin to trusted production domains.',
+        suggestedCode: "res.setHeader('Access-Control-Allow-Origin', process.env.TRUSTED_ORIGIN || 'https://example.com');"
+      });
+    }
+
+    // 12. Debug Logging Artifacts
+    if (/console\.(log|debug|trace)\(|DEBUG\s*=\s*true/i.test(code)) {
+      findings.push({
+        file: currentFile,
+        line: lineNo,
+        severity: 'SUGGESTION',
+        owasp: 'A09:2021 - Logging & Monitoring Failures',
+        category: 'Code Smells',
+        issue: 'Production debug logging statement left active in PR diff.',
+        fix: 'Remove logging output or guard with environment checks.',
+        suggestedCode: '// Removed debugging artifact before merge'
+      });
     }
   }
 
@@ -299,7 +334,7 @@ Output valid JSON only.
 Diff to review:
 ${diff}`;
 
-  // 1. Try local Ollama if connected
+  // 1. Check local Ollama instance if available
   try {
     const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     const response = await fetch(`${ollamaUrl}/api/generate`, {
@@ -322,10 +357,10 @@ ${diff}`;
       return res.json({ source: `ollama (${model})`, reviews, metrics });
     }
   } catch (err) {
-    // Fall back to heuristic
+    // Fall back to heuristic engine
   }
 
-  // 2. Automated Heuristic Engine
+  // 2. Automated Static Heuristic Engine
   const fallbackReviews = fallbackRegexReview(diff);
   const metrics = calculateSecurityScore(fallbackReviews);
   return res.json({ source: 'open-source heuristic engine', reviews: fallbackReviews, metrics });
