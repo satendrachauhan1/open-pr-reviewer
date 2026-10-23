@@ -1,7 +1,7 @@
 {
-  "name": "open-pr-reviewer",
+  "name": "code-checker",
   "version": "1.0.0",
-  "description": "Offline-First AI Code Review Agent Skill",
+  "description": "Local-first source-code syntax checker with an optional Ollama fallback",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

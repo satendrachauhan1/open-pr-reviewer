@@ -11,7 +11,7 @@
     <header>
       <div class="header-left">
         <h1>🔍 Code Checker</h1>
-        <p class="subtitle">Check source code with local syntax tools and an AI fallback</p>
+        <p class="subtitle">Find compiler errors, run test cases, and review code with clear diagnostics.</p>
       </div>
       <div class="header-right">
         <label for="modelSelect">AI fallback model:</label>
@@ -23,6 +23,11 @@
         </select>
       </div>
     </header>
+
+    <section class="welcome-banner">
+      <div><p class="eyebrow">LOCAL DEVELOPMENT WORKSPACE</p><h2>Catch issues before they reach production.</h2><p>Check a snippet or a whole project, run your own test cases, and keep your work saved in this browser.</p></div>
+      <div class="welcome-actions"><button id="trySampleBtn" class="btn primary" type="button">Try a sample</button><span class="feature-chip">Private · Runs locally</span></div>
+    </section>
 
     <main class="grid">
       <!-- Source File Upload Panel -->
@@ -36,7 +41,22 @@
           <span>Supported: C, C++, JavaScript, Python, Java, and more</span>
         </label>
         <p id="uploadStatus" class="upload-status" aria-live="polite">Local syntax tools check supported languages; Ollama can handle other languages.</p>
-
+        <div class="project-upload">
+          <h2>Check a whole project</h2>
+          <p>Choose a project folder to check every detected supported language. Project-aware tools resolve local imports where supported.</p>
+          <input id="projectFolderInput" class="file-input" type="file" webkitdirectory directory multiple>
+          <label class="project-folder-button" for="projectFolderInput">Choose project folder</label>
+          <button id="checkProjectBtn" class="btn secondary" type="button" disabled>Check Project</button>
+          <button id="downloadWorkflowBtn" class="btn secondary" type="button">Download PR workflow</button>
+        <div class="saved-project-controls">
+          <input id="projectNameInput" class="language-input" type="text" maxlength="60" placeholder="Project name" aria-label="Project name to save">
+          <button id="saveProjectBtn" class="btn secondary" type="button" disabled>Save project</button>
+          <select id="savedProjectSelect" class="language-input" aria-label="Saved projects"><option value="">No saved projects</option></select>
+          <button id="loadProjectBtn" class="btn secondary" type="button" disabled>Open</button>
+          <button id="deleteProjectBtn" class="btn-text danger-text" type="button" disabled>Delete</button>
+        </div>
+          <p id="projectStatus" class="upload-status" aria-live="polite">Up to 100 source/config files, 8 MB total.</p>
+        </div>
       </section>
 
       <section class="code-check panel">
@@ -67,11 +87,45 @@
           <option value="Other">Other…</option>
         </select>
         <input id="customLanguageInput" class="language-input" type="text" placeholder="Type a programming language" hidden>
+        <label class="code-label" for="checkLevel">Check level:</label>
+        <select id="checkLevel" class="language-input">
+          <option value="syntax">Syntax</option>
+          <option value="compile" selected>Compile / type check</option>
+          <option value="lint">Lint / formatting</option>
+        </select>
         <p id="languageHint" class="language-hint" aria-live="polite">Language will be detected when you paste code.</p>
-        <label class="code-label" for="codeInput">Code to check:</label>
-        <textarea id="codeInput" class="code-input" placeholder="Paste your source code here"></textarea>
-        <div class="actions"><button id="checkCodeBtn" class="btn primary">Check Code</button></div>
-        <div id="codeCheckResult" class="code-check-result" aria-live="polite">Enter a language and code, then click Check Code.</div>
+        <div class="editor-heading"><label class="code-label" for="codeInput">Code editor:</label><span id="editorStats" class="editor-stats">1 line · 0 chars</span></div>
+        <div class="editor-toolbar"><span id="editorLanguageBadge" class="editor-language-badge">Plain text</span><div><button id="fontDownBtn" class="editor-tool" type="button" aria-label="Decrease editor font size">A−</button><button id="fontUpBtn" class="editor-tool" type="button" aria-label="Increase editor font size">A+</button><label class="wrap-toggle"><input id="wrapToggle" type="checkbox"> Wrap lines</label></div></div>
+        <div class="editor-shell"><div id="lineGutter" class="line-gutter" aria-hidden="true">1</div><pre id="editorHighlight" class="editor-highlight" aria-hidden="true"></pre><textarea id="codeInput" class="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="Paste your source code here"></textarea></div>
+        <section class="test-panel" aria-labelledby="testCasesTitle">
+          <div class="test-panel-heading"><div><h2 id="testCasesTitle">Test cases</h2><p>Run the current editor file only. Compare its output with what you expect.</p></div><button id="addTestCaseBtn" class="btn secondary" type="button">+ Add case</button></div>
+          <div id="testCasesList" class="test-cases-list"></div>
+          <div class="test-run-actions"><span class="result-source">Runs code on this computer (5 sec/case). Run only code you trust; it has the same permissions as this app.</span><button id="runTestsBtn" class="btn primary" type="button">Run test cases</button></div>
+        </section>
+        <div class="actions">
+          <button id="refreshCheckBtn" class="btn secondary" type="button" title="Run the last check again">↻ Refresh / Re-run</button>
+          <button id="checkCodeBtn" class="btn primary" type="button">Check Code</button>
+        </div>
+        <div class="results-section">
+          <div class="results-heading"><h2>Results</h2><div id="resultTabs" class="result-tabs" role="tablist" aria-label="Result views"><button class="result-tab active" type="button" data-result-tab="summary" role="tab" aria-selected="true">Summary</button><button class="result-tab" type="button" data-result-tab="errors" role="tab" aria-selected="false">Errors <span id="errorCount" class="tab-count">0</span></button><button class="result-tab" type="button" data-result-tab="warnings" role="tab" aria-selected="false">Warnings <span id="warningCount" class="tab-count">0</span></button><button class="result-tab" type="button" data-result-tab="output" role="tab" aria-selected="false">Test output</button></div></div>
+          <div id="codeCheckResult" class="code-check-result" aria-live="polite">Enter a language and code, then click Check Code.</div>
+          <div id="testResults" class="test-results" aria-live="polite" hidden>Run test cases to see their output here.</div>
+        </div>
+        <div id="reportActions" class="report-actions" hidden>
+          <button id="downloadJsonBtn" class="btn-text" type="button">Download JSON</button>
+          <button id="downloadTextBtn" class="btn-text" type="button">Download report</button>
+        </div>
+        <section class="history-panel" aria-labelledby="historyTitle">
+          <div class="history-header">
+            <h2 id="historyTitle">Recent checks</h2>
+            <button id="clearHistoryBtn" class="btn-text" type="button">Clear history</button>
+          </div>
+          <div class="history-controls">
+            <select id="historySelect" class="language-input" aria-label="Saved check history"></select>
+            <button id="loadHistoryBtn" class="btn secondary" type="button">View result</button>
+          </div>
+          <p class="result-source">History stays in this browser and saves diagnostics only, not source code.</p>
+        </section>
       </section>
 
     </main>
@@ -88,7 +142,310 @@
     const languageHint = document.getElementById('languageHint');
     const codeFileInput = document.getElementById('codeFileInput');
     const uploadStatus = document.getElementById('uploadStatus');
+    const projectFolderInput = document.getElementById('projectFolderInput');
+    const projectStatus = document.getElementById('projectStatus');
+    const checkLevel = document.getElementById('checkLevel');
+    const lineGutter = document.getElementById('lineGutter');
+    const editorHighlight = document.getElementById('editorHighlight');
+    const editorStats = document.getElementById('editorStats');
+    const editorLanguageBadge = document.getElementById('editorLanguageBadge');
+    const testCasesList = document.getElementById('testCasesList');
+    const testResults = document.getElementById('testResults');
+    let projectFiles = [];
+    let projectLanguages = [];
+    let activeFiles = [];
+    let activeEditorPath = '';
+    let currentReport = null;
+    let lastCheckMode = 'code';
     let autoDetectLanguage = true;
+    const historyStorageKey = 'code-checker-history-v1';
+    const testCasesStorageKey = 'code-checker-test-cases-v1';
+    let resultView = 'summary';
+
+    function database() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('code-checker-workspace', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('projects', { keyPath: 'id' });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function projectStore(action, value) {
+      const db = await database();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction('projects', action === 'getAll' ? 'readonly' : 'readwrite');
+        const store = transaction.objectStore('projects');
+        const request = action === 'getAll' ? store.getAll()
+          : action === 'put' ? store.put(value)
+            : action === 'delete' ? store.delete(value) : store.get(value);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function refreshSavedProjects(selectedId = '') {
+      const select = document.getElementById('savedProjectSelect');
+      const projects = (await projectStore('getAll')).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      select.innerHTML = projects.length
+        ? projects.map(project => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.name)} · ${escapeHtml(new Date(project.updatedAt).toLocaleDateString())}</option>`).join('')
+        : '<option value="">No saved projects</option>';
+      if (selectedId && projects.some(project => project.id === selectedId)) select.value = selectedId;
+      document.getElementById('loadProjectBtn').disabled = !projects.length;
+      document.getElementById('deleteProjectBtn').disabled = !projects.length;
+    }
+
+    function readTestCases() {
+      return [...testCasesList.querySelectorAll('.test-case-row')].map((row, index) => ({
+        name: row.querySelector('.test-case-title strong').textContent.trim() || `Case ${index + 1}`,
+        input: row.querySelector('[data-case="input"]').value,
+        expected: row.querySelector('[data-case="expected"]').value
+      }));
+    }
+
+    function storeTestCases() {
+      try { localStorage.setItem(testCasesStorageKey, JSON.stringify(readTestCases())); } catch { /* Tests remain usable for this page session. */ }
+    }
+
+    function addTestCase(testCase = {}) {
+      const row = document.createElement('article');
+      row.className = 'test-case-row';
+      row.innerHTML = `<div class="test-case-title"><strong></strong><button class="btn-text danger-text" type="button" data-remove-case>Remove</button></div><label>Standard input<textarea data-case="input" rows="3" placeholder="e.g. 1 2 3"></textarea></label><label>Expected output<textarea data-case="expected" rows="3" placeholder="e.g. 6"></textarea></label>`;
+      row.querySelector('strong').textContent = testCase.name || `Case ${testCasesList.children.length + 1}`;
+      row.querySelector('[data-case="input"]').value = testCase.input || '';
+      row.querySelector('[data-case="expected"]').value = testCase.expected || '';
+      row.querySelectorAll('textarea').forEach(input => input.addEventListener('input', storeTestCases));
+      row.querySelector('[data-remove-case]').addEventListener('click', () => {
+        row.remove();
+        [...testCasesList.children].forEach((item, index) => { item.querySelector('strong').textContent = `Case ${index + 1}`; });
+        storeTestCases();
+      });
+      testCasesList.append(row);
+      storeTestCases();
+    }
+
+    try {
+      const storedCases = JSON.parse(localStorage.getItem(testCasesStorageKey) || '[]');
+      (Array.isArray(storedCases) && storedCases.length ? storedCases : [{ name: 'Case 1', input: '1 2 3', expected: '6' }]).forEach(addTestCase);
+      refreshSavedProjects().catch(() => { document.getElementById('projectStatus').textContent = 'Saved projects are unavailable in this browser.'; });
+    } catch { addTestCase({ name: 'Case 1', input: '1 2 3', expected: '6' }); }
+
+    function updateEditorChrome() {
+      const lines = codeInput.value.split('\n').length;
+      lineGutter.textContent = Array.from({ length: lines }, (_, index) => index + 1).join('\n');
+      editorStats.textContent = `${lines} line${lines === 1 ? '' : 's'} · ${codeInput.value.length.toLocaleString()} chars`;
+      const language = selectedLanguageForCode();
+      editorLanguageBadge.textContent = language || 'Plain text';
+      if (codeInput.value.length > 200000) {
+        editorHighlight.textContent = codeInput.value;
+        return;
+      }
+      const keywords = /\b(?:if|else|for|while|do|switch|case|break|continue|return|function|class|struct|enum|public|private|protected|static|const|let|var|int|float|double|char|bool|void|string|new|delete|try|catch|throw|import|from|as|async|await|def|lambda|print|pass|None|True|False|null|undefined|package|func|fn|mut|impl|trait|use|mod|pub|Self|this|super|extends|implements|interface|export|default|typeof|instanceof|true|false)\b/;
+      const tokens = /(#[ \t]*[A-Za-z_]+[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][\w$]*\b)/g;
+      let rendered = '';
+      let cursor = 0;
+      for (const match of codeInput.value.matchAll(tokens)) {
+        rendered += escapeHtml(codeInput.value.slice(cursor, match.index));
+        const token = match[0];
+        const kind = /^(#|\/\/|\/\*)/.test(token) ? 'comment'
+          : /^("|'|`)/.test(token) ? 'string'
+            : /^\d/.test(token) ? 'number'
+              : keywords.test(token) ? 'keyword'
+                : /^[A-Za-z_$][\w$]*$/.test(token) && /\s*\(/.test(codeInput.value.slice(match.index + token.length)) ? 'function-name' : '';
+        rendered += kind ? `<span class="token-${kind}">${escapeHtml(token)}</span>` : escapeHtml(token);
+        cursor = match.index + token.length;
+      }
+      rendered += escapeHtml(codeInput.value.slice(cursor));
+      editorHighlight.innerHTML = `${rendered || ''}${codeInput.value.endsWith('\n') ? ' ' : ''}`;
+    }
+
+    codeInput.addEventListener('scroll', () => {
+      lineGutter.scrollTop = codeInput.scrollTop;
+      editorHighlight.scrollTop = codeInput.scrollTop;
+      editorHighlight.scrollLeft = codeInput.scrollLeft;
+    });
+    codeInput.addEventListener('input', updateEditorChrome);
+    document.getElementById('wrapToggle').addEventListener('change', event => {
+      codeInput.classList.toggle('wrap-lines', event.target.checked);
+      codeInput.parentElement.classList.toggle('wrap-mode', event.target.checked);
+    });
+    document.getElementById('fontDownBtn').addEventListener('click', () => {
+      const size = parseFloat(getComputedStyle(codeInput).fontSize);
+      const next = `${Math.max(11, size - 1)}px`;
+      codeInput.style.fontSize = editorHighlight.style.fontSize = lineGutter.style.fontSize = next;
+    });
+    document.getElementById('fontUpBtn').addEventListener('click', () => {
+      const size = parseFloat(getComputedStyle(codeInput).fontSize);
+      const next = `${Math.min(24, size + 1)}px`;
+      codeInput.style.fontSize = editorHighlight.style.fontSize = lineGutter.style.fontSize = next;
+    });
+    codeInput.addEventListener('keydown', event => {
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const start = codeInput.selectionStart;
+        const end = codeInput.selectionEnd;
+        codeInput.setRangeText('  ', start, end, 'end');
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } else if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        document.getElementById('checkCodeBtn').click();
+      }
+    });
+
+    document.querySelectorAll('.result-tab').forEach(tab => tab.addEventListener('click', () => {
+      resultView = tab.dataset.resultTab;
+      document.querySelectorAll('.result-tab').forEach(item => {
+        const active = item === tab;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+      });
+      const result = document.getElementById('codeCheckResult');
+      result.hidden = resultView === 'output';
+      testResults.hidden = resultView !== 'output';
+      result.querySelectorAll('.code-issue').forEach(issue => {
+        issue.hidden = resultView !== 'summary' && issue.dataset.kind !== resultView;
+      });
+    }));
+
+    document.getElementById('addTestCaseBtn').addEventListener('click', () => {
+      if (testCasesList.children.length >= 10) return;
+      addTestCase({ name: `Case ${testCasesList.children.length + 1}` });
+    });
+
+    document.getElementById('saveProjectBtn').addEventListener('click', async () => {
+      const files = lastCheckMode === 'project' && projectFiles.length ? projectFiles : [{ path: activeFiles[0]?.path || 'main.txt', content: codeInput.value }];
+      const name = document.getElementById('projectNameInput').value.trim() || files[0].path.split('/')[0].replace(/\.[^.]+$/, '') || 'My project';
+      try {
+        const previous = (await projectStore('getAll')).find(item => item.name.toLowerCase() === name.toLowerCase());
+        const inferredLanguage = selectedLanguageForCode();
+        const languages = lastCheckMode === 'project' ? projectLanguages : inferredLanguage ? [inferredLanguage] : [];
+        const project = { id: previous?.id || crypto.randomUUID(), name, files, languages, testCases: readTestCases(), updatedAt: new Date().toISOString() };
+        await projectStore('put', project);
+        await refreshSavedProjects(project.id);
+        projectStatus.textContent = `Saved “${name}” in this browser.`;
+      } catch { projectStatus.textContent = 'Could not save this project. Check available browser storage.'; }
+    });
+
+    document.getElementById('loadProjectBtn').addEventListener('click', async () => {
+      const project = await projectStore('get', document.getElementById('savedProjectSelect').value);
+      if (!project) return;
+      projectFiles = project.files || [];
+      projectLanguages = project.languages || [];
+      activeFiles = projectFiles.slice();
+      if (projectFiles.length) {
+        const firstSource = projectFiles.find(file => projectLanguageByExtension[file.path.split('.').pop().toLowerCase()]) || projectFiles[0];
+        activeEditorPath = firstSource.path;
+        codeInput.value = firstSource.content;
+        const firstLanguage = projectLanguageByExtension[firstSource.path.split('.').pop().toLowerCase()];
+        setLanguage(firstLanguage || detectLanguage(codeInput.value) || 'Auto-detect', `Opened saved project: ${project.name}`);
+        lastCheckMode = 'project';
+        document.getElementById('checkProjectBtn').disabled = !projectLanguages.length;
+      }
+      document.getElementById('projectNameInput').value = project.name;
+      testCasesList.replaceChildren();
+      (project.testCases || []).forEach(addTestCase);
+      if (!testCasesList.children.length) addTestCase({ name: 'Case 1' });
+      updateEditorChrome();
+      document.getElementById('saveProjectBtn').disabled = false;
+      projectStatus.textContent = `Opened “${project.name}” (${projectFiles.length} files).`;
+    });
+
+    document.getElementById('deleteProjectBtn').addEventListener('click', async () => {
+      const id = document.getElementById('savedProjectSelect').value;
+      if (!id) return;
+      await projectStore('delete', id);
+      await refreshSavedProjects();
+      projectStatus.textContent = 'Saved project deleted.';
+    });
+
+    document.getElementById('trySampleBtn').addEventListener('click', () => {
+      const sample = '#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b, c;\n    cin >> a >> b >> c;\n    cout << a + b + c << "\\n";\n    return 0;\n}';
+      codeInput.value = sample;
+      activeEditorPath = 'sum.cpp';
+      lastCheckMode = 'code';
+      activeFiles = [{ path: 'sum.cpp', content: sample }];
+      setLanguage('C++', 'Sample loaded: add three numbers from standard input.');
+      testCasesList.replaceChildren();
+      addTestCase({ name: 'Sum three values', input: '1 2 3', expected: '6' });
+      updateEditorChrome();
+      document.getElementById('saveProjectBtn').disabled = false;
+      codeInput.focus();
+      document.getElementById('codeInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    document.getElementById('runTestsBtn').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const language = selectedLanguageForCode();
+      if (!language || !codeInput.value.trim()) {
+        testResults.textContent = 'Enter code and select a language before running test cases.';
+        document.querySelector('[data-result-tab="output"]').click();
+        return;
+      }
+      const cases = readTestCases();
+      if (!cases.length) {
+        testResults.textContent = 'Add at least one test case first.';
+        document.querySelector('[data-result-tab="output"]').click();
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Running…';
+      testResults.textContent = 'Compiling and running test cases locally…';
+      document.querySelector('[data-result-tab="output"]').click();
+      try {
+        const response = await fetch('/api/run-tests', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: codeInput.value, language, cases })
+        });
+        const data = await readApiResponse(response);
+        const passed = data.cases.filter(item => item.status === 'pass').length;
+        const summary = `<strong class="${passed === data.cases.length ? 'pass-result' : 'error-result'}">${passed === data.cases.length ? 'ALL TESTS PASSED' : 'TESTS FAILED'} · ${passed}/${data.cases.length}</strong>`;
+        const compileIssues = (data.compileIssues || []).map(issue => {
+          const file = activeFiles[0];
+          const location = file && issue.line ? `<button class="issue-location" type="button" data-file="${escapeHtml(file.path)}" data-line="${escapeHtml(issue.line)}">Line ${escapeHtml(issue.line)}</button>: ` : '';
+          return `<article class="code-issue" data-kind="errors">${location}${escapeHtml(issue.message)}${contextForIssue({ ...issue, path: file?.path })}</article>`;
+        }).join('');
+        const cards = data.cases.map((item, index) => `<article class="test-result-card ${item.status}"><strong>${escapeHtml(item.name || `Case ${index + 1}`)} · ${escapeHtml(item.status.toUpperCase())}</strong>${item.error ? `<p>${escapeHtml(item.error)}</p>` : ''}<div class="test-output-grid"><div><span>Expected</span><pre>${escapeHtml(item.expected)}</pre></div><div><span>Actual</span><pre>${escapeHtml(item.actual)}</pre></div></div></article>`).join('');
+        testResults.innerHTML = summary + compileIssues + cards;
+      } catch (error) {
+        testResults.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Run test cases';
+      }
+    });
+
+    codeInput.addEventListener('input', () => {
+      document.getElementById('saveProjectBtn').disabled = !codeInput.value.trim();
+      updateEditorChrome();
+    });
+    languageSelect.addEventListener('change', updateEditorChrome);
+    customLanguageInput.addEventListener('input', updateEditorChrome);
+
+    function getHistory() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(historyStorageKey) || '[]');
+        return Array.isArray(saved) ? saved : [];
+      } catch { return []; }
+    }
+
+    function refreshHistoryOptions() {
+      const select = document.getElementById('historySelect');
+      const records = getHistory();
+      select.innerHTML = records.length
+        ? records.map((record, index) => `<option value="${index}">${escapeHtml(new Date(record.generatedAt).toLocaleString())} · ${escapeHtml(record.language)} · ${escapeHtml(record.level)} · ${escapeHtml(record.status)}</option>`).join('')
+        : '<option value="">No saved checks yet</option>';
+      document.getElementById('loadHistoryBtn').disabled = records.length === 0;
+      document.getElementById('clearHistoryBtn').disabled = records.length === 0;
+    }
+
+    function saveHistory(report) {
+      const records = getHistory();
+      records.unshift({ ...report, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
+      try { localStorage.setItem(historyStorageKey, JSON.stringify(records.slice(0, 20))); }
+      catch { /* Keep the current report usable if browser storage is full or disabled. */ }
+      refreshHistoryOptions();
+    }
+    refreshHistoryOptions();
 
     function detectLanguage(source) {
       const code = source.trim();
@@ -135,13 +492,216 @@
     });
 
     const languageByExtension = {
-      c: 'C', h: 'C', cc: 'C++', cpp: 'C++', cxx: 'C++', hpp: 'C++', hxx: 'C++',
+      c: 'C', cc: 'C++', cpp: 'C++', cxx: 'C++', hpp: 'C++', hxx: 'C++',
       js: 'JavaScript', jsx: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript',
       ts: 'TypeScript', tsx: 'TypeScript', py: 'Python', java: 'Java', cs: 'C#',
       go: 'Go', rs: 'Rust', php: 'PHP', rb: 'Ruby', swift: 'Swift', kt: 'Kotlin',
       kts: 'Kotlin', scala: 'Scala', sc: 'Scala', dart: 'Dart', r: 'R', pl: 'Perl',
       sql: 'SQL', html: 'HTML', css: 'CSS', sh: 'Bash'
     };
+    const projectLanguageByExtension = {
+      py: 'Python', js: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript', ts: 'TypeScript', tsx: 'TypeScript',
+      c: 'C', cc: 'C++', cpp: 'C++', cxx: 'C++', hpp: 'C++', hxx: 'C++',
+      java: 'Java', go: 'Go', rs: 'Rust'
+    };
+
+    function selectedLanguageForCode() {
+      const code = codeInput.value;
+      return languageSelect.value === 'Other'
+        ? customLanguageInput.value.trim()
+        : languageSelect.value === 'Auto-detect' ? detectLanguage(code) : languageSelect.value;
+    }
+
+    function contextForIssue(issue) {
+      const file = issue.path
+        ? activeFiles.find(item => item.path === issue.path)
+        : activeFiles.length === 1 ? activeFiles[0] : null;
+      if (!file || issue.line == null || !Number.isInteger(Number(issue.line)) || Number(issue.line) < 1) return '';
+      const lines = file.content.split(/\r?\n/);
+      const line = Number(issue.line);
+      const start = Math.max(1, line - 2);
+      const end = Math.min(lines.length, line + 2);
+      return `<pre class="code-context">${lines.slice(start - 1, end).map((text, index) => {
+        const number = start + index;
+        return `<span class="code-context-line${number === line ? ' is-error' : ''}"><span class="line-number">${number}</span><span>${escapeHtml(text) || ' '}</span></span>`;
+      }).join('')}</pre>`;
+    }
+
+    function renderResult(data, language, label, saveToHistory = true) {
+      const result = document.getElementById('codeCheckResult');
+      const issues = Array.isArray(data.issues) ? data.issues : [];
+      const warnings = issues.filter(issue => /\bwarning\b/i.test(issue.message) && !/\berror\b/i.test(issue.message));
+      document.getElementById('errorCount').textContent = String(issues.length - warnings.length);
+      document.getElementById('warningCount').textContent = String(warnings.length);
+      const passed = data.status === 'pass';
+      const partial = data.status === 'partial';
+      const currentLevel = data.level || checkLevel.value;
+      const levelNames = { syntax: 'SYNTAX', compile: 'COMPILE / TYPE', lint: 'LINT / FORMAT' };
+      const levelLabel = levelNames[currentLevel] || String(currentLevel).toUpperCase();
+      const checks = Array.isArray(data.checks) ? `<div class="check-summary">${data.checks.map(check => `<span class="check-pill ${escapeHtml(check.status)}"><strong>${escapeHtml(check.language)}</strong> · ${escapeHtml(check.status)}${check.message ? ` — ${escapeHtml(check.message)}` : ''}</span>`).join('')}</div>` : '';
+      result.innerHTML = passed
+        ? `<strong class="pass-result">${escapeHtml(levelLabel)} CHECK PASSED · ${escapeHtml(data.score ?? 100)}/100</strong><p>${escapeHtml(data.message || 'No issues were reported by the selected checker.')}</p><p class="result-source">This score covers only the selected check. It does not verify expected output or prove the program logic is correct.</p><p class="result-source">${escapeHtml(currentLevel)} · ${escapeHtml(data.source || 'local checker')}</p>${checks}`
+        : partial
+          ? `<strong class="partial-result">PARTIAL CHECK · Some language tools are unavailable</strong><p>Install the listed checkers to check every language. A partial check does not receive a passing score.</p><p class="result-source">${escapeHtml(currentLevel)} · ${escapeHtml(data.source || 'local checker')}</p>${checks}`
+          : `<strong class="error-result">ERRORS FOUND · ${issues.length}</strong><p class="result-source">${escapeHtml(currentLevel)} · ${escapeHtml(data.source || 'local checker')}</p>${checks}` + issues.map(issue => {
+          const location = issue.path ? `${issue.path}${issue.line ? `:${issue.line}` : ''}` : `Line ${issue.line ?? '?'}`;
+          const fileButton = issue.path && activeFiles.some(file => file.path === issue.path)
+            ? `<button class="issue-location" type="button" data-file="${escapeHtml(issue.path)}" data-line="${escapeHtml(issue.line ?? '')}">${escapeHtml(issue.language ? `${issue.language} · ` : '')}${escapeHtml(location)}</button>`
+            : `<strong>${escapeHtml(issue.language ? `${issue.language} · ` : '')}${escapeHtml(location)}:</strong>`;
+          const kind = /\bwarning\b/i.test(issue.message) && !/\berror\b/i.test(issue.message) ? 'warnings' : 'errors';
+          return `<article class="code-issue" data-kind="${kind}">${fileButton} ${escapeHtml(issue.message)}${issue.fix ? `<p><strong>Suggested fix:</strong> <code>${escapeHtml(issue.fix)}</code></p>` : ''}${contextForIssue(issue)}</article>`;
+        }).join('');
+      document.querySelector('[data-result-tab="summary"]').click();
+      currentReport = {
+        generatedAt: data.generatedAt || new Date().toISOString(),
+        target: label,
+        language,
+        level: data.level || checkLevel.value,
+        status: data.status,
+        score: data.score,
+        checker: data.source || 'local checker',
+        checks: data.checks || [],
+        issues
+      };
+      document.getElementById('reportActions').hidden = false;
+      if (saveToHistory) saveHistory(currentReport);
+    }
+
+    document.getElementById('loadHistoryBtn').addEventListener('click', () => {
+      const records = getHistory();
+      const record = records[Number(document.getElementById('historySelect').value)];
+      if (record) {
+        activeFiles = [];
+        renderResult(record, record.language, record.target, false);
+      }
+    });
+    document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+      localStorage.removeItem(historyStorageKey);
+      refreshHistoryOptions();
+    });
+
+    function jumpToIssue(event) {
+      const location = event.target.closest('.issue-location');
+      if (!location) return;
+      const file = activeFiles.find(item => item.path === location.dataset.file);
+      if (!file) return;
+      activeEditorPath = file.path;
+      codeInput.value = file.content;
+      updateEditorChrome();
+      const line = Number(location.dataset.line);
+      if (line > 0) {
+        const offset = file.content.split(/\r?\n/).slice(0, line - 1).reduce((sum, item) => sum + item.length + 1, 0);
+        codeInput.focus();
+        codeInput.setSelectionRange(offset, offset + (file.content.split(/\r?\n/)[line - 1] || '').length);
+      }
+    }
+    document.getElementById('codeCheckResult').addEventListener('click', jumpToIssue);
+    testResults.addEventListener('click', jumpToIssue);
+
+    function downloadReport(format) {
+      if (!currentReport) return;
+      const content = format === 'json'
+        ? JSON.stringify(currentReport, null, 2)
+        : [
+            'Code Checker Report',
+            `Generated: ${currentReport.generatedAt}`,
+            `Target: ${currentReport.target}`,
+            `Language: ${currentReport.language}`,
+            `Check level: ${currentReport.level}`,
+            `Result: ${currentReport.status === 'pass' ? `${String(currentReport.level || 'check').toUpperCase()} CHECK PASSED · ${currentReport.score}/100` : currentReport.status === 'partial' ? 'PARTIAL CHECK · some tools unavailable' : `ERRORS FOUND · ${currentReport.issues.length}`}`,
+            ...(currentReport.status === 'pass' ? ['Note: This score covers only the selected check; it does not prove expected output or program logic is correct.'] : []),
+            `Checker: ${currentReport.checker}`,
+            '',
+            ...(currentReport.issues.length ? currentReport.issues.map(issue => `${issue.path ? `${issue.path}${issue.line ? `:${issue.line}` : ''}` : `Line ${issue.line ?? '?'}`}: ${issue.message}${issue.fix ? `\nSuggested fix: ${issue.fix}` : ''}`) : ['No errors reported.'])
+          ].join('\n');
+      const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `code-check-report.${format === 'json' ? 'json' : 'txt'}`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => downloadReport('json'));
+    document.getElementById('downloadTextBtn').addEventListener('click', () => downloadReport('txt'));
+
+    function setLanguage(language, hint) {
+      autoDetectLanguage = false;
+      if ([...languageSelect.options].some(option => option.value === language || option.text === language)) {
+        languageSelect.value = language;
+        customLanguageInput.hidden = true;
+      } else {
+        languageSelect.value = 'Other';
+        customLanguageInput.hidden = false;
+        customLanguageInput.value = language || 'Unknown';
+      }
+      languageHint.textContent = hint;
+    }
+
+    function workflowJob(language) {
+      const configurations = {
+        Python: { setup: '      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.x"',
+          run: 'mapfile -d "" files < <(find . -type f -name "*.py" -not -path "./.git/*" -not -path "./.venv/*" -print0)\nif ((${#files[@]})); then python -m compileall -q "${files[@]}"; else echo "No Python files found"; fi' },
+        JavaScript: { setup: '      - uses: actions/setup-node@v4\n        with:\n          node-version: 22',
+          run: 'set -e\nwhile IFS= read -r -d "" file; do node --check "$file"; done < <(find . -type f \\( -name "*.js" -o -name "*.mjs" -o -name "*.cjs" \\) -not -path "./node_modules/*" -not -path "./.git/*" -print0)' },
+        TypeScript: { setup: '      - uses: actions/setup-node@v4\n        with:\n          node-version: 22',
+          run: 'if [ -f tsconfig.json ]; then npx --yes --package typescript tsc --noEmit --pretty false --skipLibCheck; else mapfile -d "" files < <(find . -type f \\( -name "*.ts" -o -name "*.tsx" \\) -not -path "./node_modules/*" -not -path "./.git/*" -print0); if ((${#files[@]})); then npx --yes --package typescript tsc --noEmit --pretty false --skipLibCheck --target ES2022 --module ESNext --jsx react-jsx "${files[@]}"; else echo "No TypeScript files found"; fi; fi' },
+        C: { setup: '', run: 'set -e\nwhile IFS= read -r -d "" file; do gcc -Wall -Wextra -Werror -fsyntax-only "$file"; done < <(find . -type f -name "*.c" -not -path "./.git/*" -print0)' },
+        'C++': { setup: '', run: 'set -e\nwhile IFS= read -r -d "" file; do g++ -Wall -Wextra -Werror -std=c++17 -fsyntax-only "$file"; done < <(find . -type f \\( -name "*.cc" -o -name "*.cpp" -o -name "*.cxx" \\) -not -path "./.git/*" -print0)' },
+        Java: { setup: '      - uses: actions/setup-java@v4\n        with:\n          distribution: temurin\n          java-version: "21"',
+          run: 'mapfile -d "" files < <(find . -type f -name "*.java" -not -path "./.git/*" -print0)\nif ((${#files[@]})); then mkdir -p "$RUNNER_TEMP/java-classes"; javac -proc:none -d "$RUNNER_TEMP/java-classes" "${files[@]}"; else echo "No Java files found"; fi' },
+        Go: { setup: '      - uses: actions/setup-go@v5\n        with:\n          go-version: stable',
+          run: 'if [ -f go.mod ]; then go build ./...; else echo "No go.mod found; skipping Go project build"; fi' },
+        Rust: { setup: '      - uses: dtolnay/rust-toolchain@stable',
+          run: 'if [ -f Cargo.toml ]; then cargo check --locked; else set -e; while IFS= read -r -d "" file; do rustc --crate-type lib --emit metadata -o "$RUNNER_TEMP/$(basename "$file").rmeta" "$file"; done < <(find . -type f -name "*.rs" -not -path "./.git/*" -print0); fi' }
+      };
+      const config = configurations[language];
+      if (!config) return '';
+      return `  ${language.toLowerCase().replace(/\W+/g, '-')}:\n    name: ${language} check\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n${config.setup ? `${config.setup}\n` : ''}      - name: Syntax / compile check\n        shell: bash\n        run: |\n${config.run.split('\n').map(line => `          ${line}`).join('\n')}`;
+    }
+
+    document.getElementById('downloadWorkflowBtn').addEventListener('click', () => {
+      const languages = projectLanguages.length ? projectLanguages : [selectedLanguageForCode()];
+      const jobs = [...new Set(languages)].filter(language => CHECKABLE_LANGUAGES.includes(language)).map(workflowJob).filter(Boolean);
+      if (!jobs.length) {
+        projectStatus.textContent = 'Choose or upload a supported language before downloading a workflow.';
+        return;
+      }
+      const workflow = [
+        '# Generated for the languages detected in this project.',
+        '# Review the checks and dependency behavior before enabling on a repository with untrusted pull requests.',
+        'name: Code Checker',
+        'on:',
+        '  pull_request:',
+        '  push:',
+        '    branches: [main]',
+        'permissions:',
+        '  contents: read',
+        'jobs:',
+        ...jobs,
+        ''
+      ].join('\n');
+      const url = URL.createObjectURL(new Blob([workflow], { type: 'text/yaml' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'code-check.yml';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    const CHECKABLE_LANGUAGES = ['Python', 'JavaScript', 'TypeScript', 'C', 'C++', 'Java', 'Go', 'Rust'];
+
+    async function readApiResponse(response) {
+      const body = await response.text();
+      let data;
+      try {
+        data = JSON.parse(body);
+      } catch {
+        throw new Error('The Code Checker server returned a webpage instead of an API response. Restart the updated server (Ctrl+C, then npm start) and try again.');
+      }
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`);
+      return data;
+    }
 
     codeFileInput.addEventListener('change', async () => {
       const file = codeFileInput.files[0];
@@ -157,17 +717,14 @@
         const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
         const language = languageByExtension[extension] || detectLanguage(source);
         codeInput.value = source;
-        autoDetectLanguage = false;
-        if (language && [...languageSelect.options].some(option => option.value === language || option.text === language)) {
-          languageSelect.value = language;
-          customLanguageInput.hidden = true;
-        } else {
-          languageSelect.value = 'Other';
-          customLanguageInput.hidden = false;
-          customLanguageInput.value = language || (extension ? `.${extension}` : 'Unknown');
-        }
+        activeEditorPath = file.name;
+        updateEditorChrome();
+        lastCheckMode = 'code';
+        activeFiles = [{ path: file.name, content: source }];
         const selectedLanguage = language || customLanguageInput.value;
-        languageHint.textContent = `Language from file: ${selectedLanguage}`;
+        setLanguage(language || (extension ? `.${extension}` : 'Unknown'), `Language from file: ${selectedLanguage}`);
+        document.getElementById('projectNameInput').value = file.name.replace(/\.[^.]+$/, '');
+        document.getElementById('saveProjectBtn').disabled = false;
         uploadStatus.textContent = `${file.name} loaded. The check is running; see the result on the right.`;
         document.getElementById('checkCodeBtn').click();
       } catch (error) {
@@ -179,32 +736,24 @@
       const button = document.getElementById('checkCodeBtn');
       const result = document.getElementById('codeCheckResult');
       const code = codeInput.value;
-      const language = languageSelect.value === 'Other'
-        ? customLanguageInput.value.trim()
-        : languageSelect.value === 'Auto-detect'
-          ? detectLanguage(code)
-          : languageSelect.value;
+      const language = selectedLanguageForCode();
       if (!code.trim() || !language) {
         result.textContent = 'Enter both a programming language and code.';
+        document.querySelector('[data-result-tab="summary"]').click();
         return;
       }
+      lastCheckMode = 'code';
       button.disabled = true;
       button.textContent = 'Checking...';
+      document.querySelector('[data-result-tab="summary"]').click();
       result.textContent = 'Checking code with local syntax tools...';
       try {
         const response = await fetch('/api/check-code', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, language, model: document.getElementById('modelSelect').value })
+          body: JSON.stringify({ code, language, filename: activeFiles[0]?.path || '', level: checkLevel.value, model: document.getElementById('modelSelect').value })
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Code check failed.');
-        if (data.status === 'pass') {
-          result.innerHTML = `<strong class="pass-result">PASS · ${data.score}/100</strong><p>${escapeHtml(data.message || 'No clear programming errors found.')}</p><p class="result-source">Checked by ${escapeHtml(data.source || 'local model')}</p>`;
-        } else {
-          result.innerHTML = `<strong class="error-result">ERRORS FOUND · ${data.issues.length}</strong><p class="result-source">Checked by ${escapeHtml(data.source || 'local model')}</p>` + data.issues.map(issue =>
-            `<article class="code-issue"><strong>Line ${escapeHtml(issue.line ?? '?')}:</strong> ${escapeHtml(issue.message)}${issue.fix ? `<p><strong>Suggested fix:</strong> <code>${escapeHtml(issue.fix)}</code></p>` : ''}</article>`
-          ).join('');
-        }
+        const data = await readApiResponse(response);
+        renderResult(data, language, activeFiles[0]?.path || 'pasted code');
       } catch (error) {
         result.textContent = error.message;
       } finally {
@@ -212,6 +761,95 @@
         button.textContent = 'Check Code';
       }
     };
+
+    projectFolderInput.addEventListener('change', async () => {
+      projectFiles.length = 0;
+      projectLanguages = [];
+      document.getElementById('checkProjectBtn').disabled = true;
+      const selected = [...projectFolderInput.files];
+      if (!selected.length) return;
+      const supported = selected.filter(file => {
+        const ext = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+        return Boolean(projectLanguageByExtension[ext]) || ['h', 'json', 'yaml', 'yml', 'toml', 'txt', 'xml', 'properties', 'gradle', 'lock'].includes(ext) || ['go.mod', 'cargo.toml', 'cmakelists.txt'].includes(file.name.toLowerCase());
+      });
+      if (supported.length > 100 || supported.reduce((sum, file) => sum + file.size, 0) > 8 * 1024 * 1024) {
+        projectStatus.textContent = 'The selected source/config files exceed 100 files or 8 MB.';
+        return;
+      }
+      projectStatus.textContent = `Reading ${supported.length} source/config files...`;
+      try {
+        for (const file of supported) {
+          const relative = file.webkitRelativePath || file.name;
+          const segments = relative.split('/');
+          const projectPath = segments.length > 1 ? segments.slice(1).join('/') : relative;
+          projectFiles.push({ path: projectPath, content: await file.text() });
+        }
+        const counts = {};
+        for (const file of projectFiles) {
+          const ext = file.path.includes('.') ? file.path.split('.').pop().toLowerCase() : '';
+          const language = projectLanguageByExtension[ext];
+          if (language) counts[language] = (counts[language] || 0) + 1;
+        }
+        projectLanguages = Object.keys(counts);
+        if (!projectLanguages.length) throw new Error('No supported programming-language source files found in that folder.');
+        const firstSource = projectFiles.find(file => projectLanguageByExtension[file.path.split('.').pop().toLowerCase()]);
+        if (firstSource) {
+          activeEditorPath = firstSource.path;
+          codeInput.value = firstSource.content;
+          setLanguage(projectLanguageByExtension[firstSource.path.split('.').pop().toLowerCase()], `Project languages detected: ${projectLanguages.join(', ')}.`);
+          updateEditorChrome();
+        }
+        const summary = projectLanguages.map(language => `${language} (${counts[language]})`).join(', ');
+        const editorLanguage = projectLanguageByExtension[activeEditorPath.split('.').pop().toLowerCase()] || projectLanguages[0];
+        setLanguage(editorLanguage, `Project languages detected: ${summary}. All supported languages will be checked.`);
+        updateEditorChrome();
+        lastCheckMode = 'project';
+        document.getElementById('checkProjectBtn').disabled = false;
+        document.getElementById('saveProjectBtn').disabled = false;
+        document.getElementById('projectNameInput').value = (selected[0].webkitRelativePath || '').split('/')[0] || 'My project';
+        projectStatus.textContent = `${projectFiles.length} files ready across ${projectLanguages.length} language(s). Choose a check level and click Check Project.`;
+      } catch (error) {
+        projectFiles.length = 0;
+        document.getElementById('checkProjectBtn').disabled = true;
+        projectStatus.textContent = error.message;
+      }
+    });
+
+    document.getElementById('checkProjectBtn').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (!projectFiles.length || !projectLanguages.length) return;
+      button.disabled = true;
+      button.textContent = 'Checking...';
+      lastCheckMode = 'project';
+      projectStatus.textContent = `Checking ${projectFiles.length} files across ${projectLanguages.join(', ')}...`;
+      activeFiles = projectFiles.slice();
+      try {
+        const response = await fetch('/api/check-project', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: projectFiles, language: 'All', level: checkLevel.value, model: document.getElementById('modelSelect').value })
+        });
+        const data = await readApiResponse(response);
+        renderResult(data, projectLanguages.join(', '), `${projectFiles.length} project files`);
+        projectStatus.textContent = data.status === 'pass' ? 'All project language checks passed.' : data.status === 'partial' ? 'Some required language checkers are missing; see the results.' : 'Project check found issues; see the results.';
+      } catch (error) {
+        projectStatus.textContent = error.message;
+      } finally {
+        button.disabled = projectFiles.length === 0;
+        button.textContent = 'Check Project';
+      }
+    });
+
+    codeInput.addEventListener('input', () => {
+      const currentFile = activeEditorPath && projectFiles.find(file => file.path === activeEditorPath);
+      if (currentFile) currentFile.content = codeInput.value;
+      activeFiles = [{ path: activeEditorPath || 'pasted-code', content: codeInput.value }];
+      if (!currentFile) lastCheckMode = 'code';
+    });
+
+    document.getElementById('refreshCheckBtn').addEventListener('click', () => {
+      if (lastCheckMode === 'project' && projectFiles.length) document.getElementById('checkProjectBtn').click();
+      else document.getElementById('checkCodeBtn').click();
+    });
 
   </script>
 </body>

@@ -1,150 +1,51 @@
-# 🔍 Open PR Reviewer
+# Code Checker
 
-> **Offline-First, Zero-API-Key AI Agent Skill for Automated Pull Request Reviews**  
-> *Built for Hacktoberfest Hack Day — Track 1: Best Open-Source AI Project*
+A local-first code review workspace. Edit snippets, check source files and projects, run input/output cases, and review diagnostics in the browser.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Standard: Agent Skills](https://img.shields.io/badge/Standard-Agent%20Skills%20v1.0-emerald)](https://agentskills.io/specification)
-[![Engine: Ollama](https://img.shields.io/badge/Engine-Ollama%20(Local)-orange)](https://docs.ollama.com/)
+## Features
 
----
+- Upload a source file or paste code directly.
+- Detect common languages from file extensions and code patterns.
+- Run local syntax checks for Python, JavaScript, C, C++, and Java when their tools are installed; TypeScript, Go, and Rust checks are enabled when their toolchains are installed.
+- Check all detected supported languages in a project folder. Compilers can resolve project files and imports where their normal build/check commands support it.
+- Show diagnostics with line context when the checker supplies a location, and download a JSON or text report.
+- Check syntax, compile/type rules, or lint/formatting rules; mixed-language folders run checks for each detected supported language.
+- Re-run the active check with Refresh, revisit recent results stored in the browser, and download a GitHub Actions workflow for detected project languages.
+- Edit in a syntax-colored, line-numbered editor with indentation, wrapping, font-size controls, and source-line navigation.
+- Save and reopen projects locally in browser storage, including their test cases.
+- Run up to 10 input/expected-output cases for Python, JavaScript, TypeScript, C, C++, Java, Go, and Rust.
+- Review summary, errors, warnings, and test output in separate result views; try the built-in sample.
+- Optionally use a local Ollama model for single-file languages without an installed checker.
 
-## 📌 Problem Statement
+## Quick start
 
-Open-source maintainers are buried under pull requests. Manual code reviews are time-consuming, inconsistent, and often miss critical security risks and regression bugs before merging.
+Requirements: Node.js 18+ and npm. Install the compiler/runtime for each language you want checked: Python, Node.js, GCC, G++, JDK, TypeScript (`tsc`), Go, and/or Rust (`rustc`). Install optional lint tools separately: Ruff, ESLint 9+, cppcheck, Go, and rustfmt. Ollama is optional for single-file checks where a local checker is unavailable.
 
-Existing AI code review solutions suffer from three core drawbacks:
-1. **Privacy & Security Risks:** Sending proprietary or pre-release open-source code to external cloud LLM servers.
-2. **High Costs:** Requiring paid API tokens and recurring subscriptions.
-3. **Closed Ecosystems:** Proprietary integrations that cannot be ported between tools.
-
----
-
-## 💡 Solution
-
-**Open PR Reviewer** is a 100% open-source, local-first code review tool and Agent Skill compliant with the [Agent Skills Specification](https://agentskills.io/specification).
-
-- **100% Private & Offline:** Powered locally by Ollama (`codellama:7b` / `qwen2.5-coder`). No external server calls, no telemetry, and zero network leakage.
-- **Fail-Safe Heuristic Engine:** Features an instant regex-based heuristic safety net to catch critical secrets and injection flaws even when local LLM instances are cycling.
-- **Agent Skill Ready:** Plugs directly into autonomous coding agents like OpenCode, Cursor, and Claude Code using standardized I/O schemas.
-- **Interactive UI + CLI:** Inspect diffs in real time via an intuitive dashboard or pipe `git diff` streams straight from terminal workflows.
-
----
-
-## 🏗️ Architecture
-
-```
-+-------------------------------------------------------------+
-|                     Input Git Diff                          |
-|             (CLI stdin / Web UI Text Area)                  |
-+------------------------------+------------------------------+
-                               |
-                               v
-               +---------------+---------------+
-               |    Diff Parsing & Chunking    |
-               +---------------+---------------+
-                               |
-               +---------------+---------------+
-               |    Local Ollama Daemon        |
-               |    (CodeLlama-7B / Qwen)      |
-               +---------------+---------------+
-                               |
-                   [LLM Reachable?]
-                   /              \
-            (Yes) /                \ (No / Timeout)
-                 v                  v
-    +-------------------+    +--------------------+
-    | Structured JSON   |    | Heuristic Fallback |
-    | AI Vulnerability  |    | Regex Engine       |
-    | Analysis          |    | (Secrets, SQLi)    |
-    +---------+---------+    +---------+----------+
-              \                        /
-               \                      /
-                v                    v
-         +----------------------------------+
-         |      Standardized JSON Output    |
-         |  (Severity, Line, Issue, Fix)    |
-         +-----------------+----------------+
-                           |
-            +--------------+--------------+
-            |                             |
-            v                             v
-+-----------------------+     +-----------------------+
-|  Terminal Rich Table  |     | Modern Dark-Theme Web |
-|  & Markdown Summary   |     | Dashboard Interface   |
-+-----------------------+     +-----------------------+
-```
-
----
-
-## 🚀 Quickstart Guide
-
-### Prerequisites
-1. [Node.js](https://nodejs.org/) (v18+)
-2. [Ollama](https://ollama.com/) installed and running:
-   ```bash
-   ollama pull codellama:7b
-   ```
-
-### 1. Clone & Install
-```bash
-git clone [https://github.com/](https://github.com/)<your-username>/open-pr-reviewer.git
-cd open-pr-reviewer
+```powershell
 npm install
+npm start
 ```
 
-### 2. Start the Application
-```bash
-node server.js
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000). If port 3000 is already in use, stop the existing server with **Ctrl+C** in its terminal before restarting.
 
-### 3. Review a Sample Diff
-1. Click **Load Sample Diff** on the web dashboard.
-2. Click **Review PR Offline**.
-3. View the classified security findings, line references, and remediation code.
+For AI fallback on other languages, install and run [Ollama](https://ollama.com/), then install a model such as:
 
----
-
-## 🧩 Agent Skills Specification (`skill.yaml`)
-
-This tool complies with the [Agent Skills standard](https://agentskills.io/specification):
-
-```yaml
-version: "1.0.0"
-name: "open-pr-reviewer"
-description: "Offline, zero-API-key automated code review agent skill."
-author: "Open PR Reviewer Team"
-license: "MIT"
-entrypoint: "server.js"
-
-interface:
-  inputs:
-    diff:
-      type: "string"
-      description: "Unified git diff of pull request."
-      required: true
-  outputs:
-    reviews:
-      type: "array"
-      items:
-        type: "object"
-        properties:
-          file: { type: "string" }
-          line: { type: "integer" }
-          severity: { type: "string", enum: ["CRITICAL", "WARNING", "SUGGESTION", "STYLE"] }
-          issue: { type: "string" }
-          fix: { type: "string" }
+```powershell
+ollama pull codellama:7b
 ```
 
----
+## How checking works
 
-## 🔒 Security & Privacy
+Python uses the standard-library `ast` parser; JavaScript uses Node.js syntax-check mode; C/C++ use GCC/G++ syntax-only mode for Syntax and object compilation for Compile; Java uses `javac`; TypeScript uses `tsc --noEmit`; Go uses `go build`; and Rust uses `rustc`. Project checks pass files from every detected supported language to the relevant compiler/checker. Compiled outputs and temporary project copies are kept in a temporary directory and removed after checking. The separate test runner executes the current editor code locally with a 5-second timeout and a 64 KB output cap per case. Run only code you trust: it executes with the same permissions as the app. The compiler checker itself does not run submitted programs or Cargo build scripts. Rust checks do not resolve Cargo dependencies. Other languages use the selected local Ollama model for single-file checks when available. Without a checker or Ollama, the app returns an unavailable error rather than a false pass.
 
-Open PR Reviewer performs all inference entirely on `localhost`. At no stage is your code, diff text, or file structure sent across public networks or proprietary APIs.
+A pass means every requested checker reported no issues within its scope. A partial project result means one or more required language tools were unavailable and does not receive a passing score. Results do not prove that the program is logically correct, secure, or will run successfully. JSX/TSX, framework-specific code, and nonstandard build systems may require project configuration. Linting requires the relevant local tool (Ruff, ESLint, cppcheck, go vet, or rustfmt); Java and TypeScript linting are not built in.
 
----
+The UI can download a language-specific GitHub Actions workflow for pull requests and pushes. This repository also has its own source-syntax workflow in `.github/workflows/code-check.yml`.
 
-## 📜 License
+## Documentation
 
-Distributed under the [MIT License](LICENSE).
+See [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) for the full architecture, toolchain, setup, API schema, privacy behavior, limitations, and judge demo.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

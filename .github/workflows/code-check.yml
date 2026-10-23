@@ -1,0 +1,33 @@
+name: Code Checker CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-syntax:
+    name: Check Code Checker source syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check server JavaScript
+        run: node --check server.js
+      - name: Check browser JavaScript syntax
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const os = require('node:os');
+          const path = require('node:path');
+          const html = fs.readFileSync('public/index.html', 'utf8');
+          const script = html.match(/<script>([\s\S]*?)<\/script>/);
+          if (!script) throw new Error('Inline application script not found');
+          fs.writeFileSync(path.join(os.tmpdir(), 'code-checker-ui.js'), script[1]);
+          NODE
+          node --check "$RUNNER_TEMP/code-checker-ui.js"

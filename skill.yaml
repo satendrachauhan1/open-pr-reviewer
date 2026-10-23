@@ -1,43 +1,51 @@
 version: "1.0.0"
-name: "open-pr-reviewer"
-description: "Offline, zero-API-key automated code review agent skill that audits git unified diffs."
-author: "Open PR Reviewer Team"
+name: "code-checker"
+description: "Local-first source-code syntax checker with an optional local Ollama fallback."
+author: "Code Checker Contributors"
 license: "MIT"
-repository: "https://github.com/<your-username>/open-pr-reviewer"
+repository: "https://github.com/satendrachauhan1/open-pr-reviewer"
 entrypoint: "server.js"
 
 interface:
   inputs:
-    diff:
+    code:
       type: "string"
-      description: "Unified git diff of the pull request to review."
+      description: "Source code to check."
+      required: true
+    language:
+      type: "string"
+      description: "Programming language of the source code."
       required: true
     model:
       type: "string"
-      description: "Local Ollama model identifier (default: codellama:7b)."
+      description: "Local Ollama model for languages without a built-in checker."
       default: "codellama:7b"
       required: false
   outputs:
+    status:
+      type: "string"
+      enum: ["pass", "errors"]
+      description: "Whether the checker found diagnostics."
+    score:
+      type: "integer"
+      description: "100 when no diagnostics are returned; 0 when errors are returned."
+    language:
+      type: "string"
+      description: "Language used for the check."
     source:
       type: "string"
-      description: "Execution engine used (ollama or offline-heuristic-fallback)."
-    reviews:
+      description: "Local syntax tool or Ollama model that performed the check."
+    issues:
       type: "array"
       items:
         type: "object"
         properties:
-          file:
-            type: "string"
-            description: "Target file path."
           line:
             type: "integer"
-            description: "Line number where the issue was detected."
-          severity:
+            description: "Line where the issue was detected, when available."
+          message:
             type: "string"
-            enum: ["CRITICAL", "WARNING", "SUGGESTION", "STYLE"]
-          issue:
-            type: "string"
-            description: "Summary of detected flaw or code smell."
+            description: "Diagnostic message."
           fix:
             type: "string"
-            description: "Suggested code patch or remediation advice."
+            description: "Suggested correction, when available."
