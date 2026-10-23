@@ -196,6 +196,20 @@ function fallbackRegexReview(diffText) {
           suggestedCode: '// Removed debugging artifact before merge'
         });
       }
+      // 12. Syntax check: Unclosed string literal
+const quoteCount = (code.match(/(?<!\\)"/g) || []).length;
+if (quoteCount % 2 !== 0) {
+  findings.push({
+    file: currentFile,
+    line: lineNo,
+    severity: 'WARNING',
+    owasp: 'A04:2021 - Insecure Design',
+    category: 'Syntax & Build',
+    issue: 'Unclosed string literal detected (syntax / build failure).',
+    fix: 'Close string quotes with matching `"` and terminate with a semicolon.',
+    suggestedCode: code + '";'
+  });
+}
     } else if (!rawLine.startsWith('-')) {
       lineNo++;
     }
