@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -364,6 +365,148 @@ ${diff}`;
   const fallbackReviews = fallbackRegexReview(diff);
   const metrics = calculateSecurityScore(fallbackReviews);
   return res.json({ source: 'open-source heuristic engine', reviews: fallbackReviews, metrics });
+});
+
+// General-purpose source-code error check. Prefer local syntax tools and use
+// the local model for languages without an installed checker.
+function runLocalCommand(command, args, source, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    const child = spawn(command, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('error', error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal, stdout, stderr });
+    });
+    child.stdin.end(source);
+  });
+}
+
+async function runLocalSyntaxCheck(language, source) {
+  const normalized = language.trim().toLowerCase();
+  let command;
+  let args;
+  if (normalized === 'python' || normalized === 'python 3') {
+    command = process.env.PYTHON_PATH || 'python';
+    const pythonScript = [
+      'import ast, sys',
+      'source = sys.stdin.buffer.read().decode("utf-8", errors="replace")',
+      'try:',
+      '    ast.parse(source)',
+      'except SyntaxError as error:',
+      '    print(f"SyntaxError at line {error.lineno}: {error.msg}")',
+      '    sys.exit(1)',
+      'except Exception as error:',
+      '    print(f"{type(error).__name__}: {error}")',
+      '    sys.exit(1)'
+    ].join('\n');
+    args = ['-c', pythonScript];
+  } else if (['javascript', 'js', 'node.js'].includes(normalized)) {
+    command = process.execPath;
+    args = ['--check', '-'];
+  } else if (normalized === 'c') {
+    command = process.env.C_COMPILER || 'gcc';
+    args = ['-x', 'c', '-fsyntax-only', '-'];
+  } else if (['c++', 'cpp', 'cxx'].includes(normalized)) {
+    command = process.env.CXX_COMPILER || 'g++';
+    args = ['-x', 'c++', '-std=c++17', '-fsyntax-only', '-'];
+  } else {
+    return null;
+  }
+
+  try {
+    const result = await runLocalCommand(command, args, source);
+    const output = (result.stdout || result.stderr).trim();
+    const lineMatch = output.match(/(?:line\s+|:)(\d+)(?::\d+)?/i);
+    return {
+      source: `${language} syntax checker`,
+      issues: result.code === 0 ? [] : [{
+        line: lineMatch ? Number(lineMatch[1]) : null,
+        message: output || `${language} syntax check failed (exit code ${result.code}).`,
+        fix: ''
+      }]
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+app.post('/api/check-code', async (req, res) => {
+  const { code, language, model = 'codellama:7b' } = req.body;
+  if (typeof code !== 'string' || !code.trim()) {
+    return res.status(400).json({ error: 'Code cannot be empty.' });
+  }
+  if (typeof language !== 'string' || !language.trim()) {
+    return res.status(400).json({ error: 'Programming language is required.' });
+  }
+
+  try {
+    const localResult = await runLocalSyntaxCheck(language, code);
+    if (localResult) {
+      const passed = localResult.issues.length === 0;
+      return res.json({
+        status: passed ? 'pass' : 'errors',
+        score: passed ? 100 : 0,
+        language: language.trim(),
+        source: localResult.source,
+        message: passed ? 'Syntax check passed. No syntax errors found.' : undefined,
+        issues: localResult.issues
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: `Local ${language} syntax check failed: ${err.message}` });
+  }
+
+  const prompt = `You are a careful compiler-style code checker. Check the supplied ${language} code for definite syntax, type, name-resolution, and other clear compile-time errors. Do not report style preferences or speculative runtime concerns as errors. If the code is valid, return no issues. Return valid JSON only, using this schema:
+{"issues":[{"line":1,"message":"specific error","fix":"suggested correction"}]}
+The line number must refer to the supplied code. Do not claim you compiled or executed the code.
+
+Code:\n${code}`;
+
+  try {
+    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    const response = await fetch(`${ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt, stream: false, format: 'json' }),
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+
+    const data = await response.json();
+    const parsed = JSON.parse(data.response);
+    const issues = Array.isArray(parsed) ? parsed : parsed.issues;
+    if (!Array.isArray(issues)) throw new Error('Model response did not contain an issues array');
+
+    const normalized = issues.map(issue => ({
+      line: Number.isInteger(Number(issue.line)) && Number(issue.line) > 0 ? Number(issue.line) : null,
+      message: String(issue.message || issue.issue || 'Unspecified error'),
+      fix: String(issue.fix || '')
+    }));
+    const passed = normalized.length === 0;
+    return res.json({
+      status: passed ? 'pass' : 'errors',
+      score: passed ? 100 : 0,
+      language: language.trim(),
+      model,
+      issues: normalized
+    });
+  } catch (err) {
+    return res.status(503).json({
+      error: `No local syntax checker is available for ${language}, and Ollama could not check the code. Install a language compiler/runtime or start Ollama with the selected model.`,
+      detail: err.message
+    });
+  }
 });
 
 // Safe fallback for Express v5

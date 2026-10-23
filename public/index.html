@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Open PR Reviewer - Offline AI Agent Skill</title>
+  <title>Code Checker</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <header>
       <div class="header-left">
-        <h1>🔍 Open PR Reviewer</h1>
-        <p class="subtitle">Offline-First AI Code Review Agent for Hacktoberfest Track 1</p>
+        <h1>🔍 Code Checker</h1>
+        <p class="subtitle">Check source code with local syntax tools and an AI fallback</p>
       </div>
       <div class="header-right">
-        <label for="modelSelect">Agent Engine / Model:</label>
+        <label for="modelSelect">AI fallback model:</label>
         <select id="modelSelect">
           <option value="codellama:7b">CodeLlama (7B) - Default</option>
           <option value="qwen2.5-coder:7b">Qwen 2.5 Coder (7B)</option>
@@ -24,337 +24,195 @@
       </div>
     </header>
 
-    <!-- Public GitHub PR Fetcher Bar -->
-    <div class="fetch-bar">
-      <input type="text" id="prUrlInput" placeholder="Enter public GitHub PR URL (e.g., https://github.com/torvalds/linux/pull/123)" />
-      <button id="fetchPrBtn" class="btn secondary">Fetch PR Diff</button>
-    </div>
-
-    <!-- Judge Scenarios Bar -->
-    <div class="scenario-bar">
-      <span><strong>Judge Demo Scenarios:</strong></span>
-      <button class="btn-chip" id="demoSecLeak">Scenario 1: Credential & Key Leaks</button>
-      <button class="btn-chip" id="demoSqlRce">Scenario 2: SQL Injection & Eval RCE</button>
-      <button class="btn-chip" id="demoCBuffer">Scenario 3: C/C++ Buffer Overflow & Memory</button>
-      <button class="btn-chip" id="demoSensitive">Scenario 4: Sensitive File (.env)</button>
-      <button class="btn-chip" id="demoClean">Scenario 5: Clean PR (Zero Issues)</button>
-    </div>
-
     <main class="grid">
-      <!-- Input Panel -->
+      <!-- Source File Upload Panel -->
       <section class="panel">
-        <div class="panel-header">
-          <label for="diffInput">Git Unified Diff:</label>
-          <button id="clearBtn" class="btn-text">Clear</button>
-        </div>
-        <textarea id="diffInput" placeholder="Paste unified git diff here (e.g. git diff main...feature)"></textarea>
-        <div class="actions">
-          <button id="reviewBtn" class="btn primary">Run Security Audit</button>
-        </div>
+        <div class="panel-header"><label for="codeFileInput">Upload a source code file:</label></div>
+        <p class="upload-description">Choose a code file from your computer. We’ll detect its language and check it.</p>
+        <input id="codeFileInput" class="file-input" type="file" accept=".c,.h,.cc,.cpp,.cxx,.hpp,.hxx,.js,.jsx,.mjs,.cjs,.ts,.tsx,.py,.java,.cs,.go,.rs,.php,.rb,.swift,.kt,.kts,.scala,.sc,.dart,.r,.R,.pl,.sql,.html,.css,.sh,.txt">
+        <label class="upload-dropzone" for="codeFileInput">
+          <span class="upload-icon">↑</span>
+          <strong>Choose a code file</strong>
+          <span>Supported: C, C++, JavaScript, Python, Java, and more</span>
+        </label>
+        <p id="uploadStatus" class="upload-status" aria-live="polite">Local syntax tools check supported languages; Ollama can handle other languages.</p>
+
       </section>
 
-      <!-- Results Panel -->
-      <section class="panel">
-        <div class="panel-header">
-          <span id="resultsCount">Found 0 issue(s)</span>
-          <span id="engineBadge" class="badge">Engine: Ready</span>
-        </div>
-
-        <!-- Security Metric Scorecard -->
-        <div class="metric-card" id="metricCard" style="display: none;">
-          <div class="metric-box">
-            <span class="metric-label">Security Score</span>
-            <span class="metric-value" id="scoreVal">100/100</span>
-          </div>
-          <div class="metric-box">
-            <span class="metric-label">Risk Grade</span>
-            <span class="metric-value" id="gradeVal">A+</span>
-          </div>
-          <div class="metric-box">
-            <span class="metric-label">Compliance</span>
-            <span class="metric-value" id="complianceVal">Pass</span>
-          </div>
-        </div>
-
-        <!-- Category Distribution Pill Bar -->
-        <div id="categoryBar" class="category-pills" style="display: none;"></div>
-
-        <!-- Filter Chips & Export Actions -->
-        <div class="filter-bar" id="filterBar" style="display: none;">
-          <div class="chips">
-            <button class="filter-chip active" data-filter="ALL">All</button>
-            <button class="filter-chip" data-filter="CRITICAL">Critical</button>
-            <button class="filter-chip" data-filter="WARNING">Warning</button>
-            <button class="filter-chip" data-filter="SUGGESTION">Suggestions</button>
-          </div>
-          <div class="export-actions">
-            <button id="copyMdBtn" class="btn-text">📋 Copy Markdown</button>
-            <button id="exportJsonBtn" class="btn-text">💾 Export JSON</button>
-          </div>
-        </div>
-
-        <!-- Issues List -->
-        <div id="resultsList" class="results-list">
-          <p class="empty-state">Paste a unified diff or click any demo scenario above to test the reviewer.</p>
-        </div>
+      <section class="code-check panel">
+        <div class="panel-header"><label for="languageSelect">Programming language:</label></div>
+        <select id="languageSelect" class="language-input">
+          <option value="Auto-detect">Auto-detect from code</option>
+          <option>Python</option>
+          <option>JavaScript</option>
+          <option>TypeScript</option>
+          <option>C++</option>
+          <option>C</option>
+          <option>Java</option>
+          <option>C#</option>
+          <option>Go</option>
+          <option>Rust</option>
+          <option>PHP</option>
+          <option>Ruby</option>
+          <option>Swift</option>
+          <option>Kotlin</option>
+          <option>Scala</option>
+          <option>Dart</option>
+          <option>R</option>
+          <option>Perl</option>
+          <option>SQL</option>
+          <option>HTML</option>
+          <option>CSS</option>
+          <option>Bash</option>
+          <option value="Other">Other…</option>
+        </select>
+        <input id="customLanguageInput" class="language-input" type="text" placeholder="Type a programming language" hidden>
+        <p id="languageHint" class="language-hint" aria-live="polite">Language will be detected when you paste code.</p>
+        <label class="code-label" for="codeInput">Code to check:</label>
+        <textarea id="codeInput" class="code-input" placeholder="Paste your source code here"></textarea>
+        <div class="actions"><button id="checkCodeBtn" class="btn primary">Check Code</button></div>
+        <div id="codeCheckResult" class="code-check-result" aria-live="polite">Enter a language and code, then click Check Code.</div>
       </section>
+
     </main>
   </div>
 
   <script>
-    const scenarios = {
-      leak: `diff --git a/config/auth.js b/config/auth.js
---- a/config/auth.js
-+++ b/config/auth.js
-@@ -5,2 +5,4 @@
-- const token = process.env.AUTH_SECRET;
-+ const apiKey = "sk_live_998877665544332211";
-+ const awsKey = "AKIAIOSFODNN7EXAMPLE";
-+ const privateKey = "-----BEGIN RSA PRIVATE KEY-----";`,
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
 
-      sqlRce: `diff --git a/server/routes.js b/server/routes.js
---- a/server/routes.js
-+++ b/server/routes.js
-@@ -10,3 +10,5 @@ router.post('/login', (req, res) => {
-- const query = db.query('SELECT * FROM users WHERE email = $1', [req.body.email]);
-+ const query = db.query("SELECT * FROM users WHERE email = '" + req.body.email + "'");
-+ const execHandler = eval(req.body.customScript);
-+ res.setHeader('Access-Control-Allow-Origin', '*');
-+ res.json({ status: 'ok' });
-});`,
+    const languageSelect = document.getElementById('languageSelect');
+    const customLanguageInput = document.getElementById('customLanguageInput');
+    const codeInput = document.getElementById('codeInput');
+    const languageHint = document.getElementById('languageHint');
+    const codeFileInput = document.getElementById('codeFileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    let autoDetectLanguage = true;
 
-      cBuffer: `diff --git a/src/ds/linked_list.c b/src/ds/linked_list.c
---- a/src/ds/linked_list.c
-+++ b/src/ds/linked_list.c
-@@ -23,6 +23,8 @@ bool list_push_front(LinkedList *list, int val) {
-     Node *new_node = (Node *)malloc(sizeof(Node));
-+    char debug_tag[16];
-+    sprintf(debug_tag, "node_val_%d_with_long_prefix", val);
-+    free(new_node);
-     new_node->data = val;`,
-
-      sensitive: `diff --git a/.env b/.env
-new file mode 100644
---- /dev/null
-+++ b/.env
-@@ -0,0 +1,3 @@
-+DB_PASSWORD=SuperSecretDatabasePass123!
-+JWT_SECRET=production_jwt_signing_secret_998273
-+PORT=5000`,
-
-      clean: `diff --git a/src/ds/linked_list.c b/src/ds/linked_list.c
---- a/src/ds/linked_list.c
-+++ b/src/ds/linked_list.c
-@@ -23,4 +23,6 @@ bool list_push_front(LinkedList *list, int val) {
-+    Node *new_node = (Node *)malloc(sizeof(Node));
-+    if (!new_node) return false;
-     new_node->data = val;
-+    new_node->next = list->head;
-+    list->head = new_node;`
-    };
-
-    const diffInput = document.getElementById('diffInput');
-    const prUrlInput = document.getElementById('prUrlInput');
-    const reviewBtn = document.getElementById('reviewBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const fetchPrBtn = document.getElementById('fetchPrBtn');
-    const modelSelect = document.getElementById('modelSelect');
-    const engineBadge = document.getElementById('engineBadge');
-    const resultsCount = document.getElementById('resultsCount');
-    const resultsList = document.getElementById('resultsList');
-    const metricCard = document.getElementById('metricCard');
-    const categoryBar = document.getElementById('categoryBar');
-    const scoreVal = document.getElementById('scoreVal');
-    const gradeVal = document.getElementById('gradeVal');
-    const complianceVal = document.getElementById('complianceVal');
-    const filterBar = document.getElementById('filterBar');
-    const copyMdBtn = document.getElementById('copyMdBtn');
-    const exportJsonBtn = document.getElementById('exportJsonBtn');
-
-    let currentFindings = [];
-    let currentFilter = 'ALL';
-
-    document.getElementById('demoSecLeak').onclick = () => { diffInput.value = scenarios.leak; };
-    document.getElementById('demoSqlRce').onclick = () => { diffInput.value = scenarios.sqlRce; };
-    document.getElementById('demoCBuffer').onclick = () => { diffInput.value = scenarios.cBuffer; };
-    document.getElementById('demoSensitive').onclick = () => { diffInput.value = scenarios.sensitive; };
-    document.getElementById('demoClean').onclick = () => { diffInput.value = scenarios.clean; };
-
-    clearBtn.onclick = () => {
-      diffInput.value = '';
-      prUrlInput.value = '';
-      resultsList.innerHTML = '<p class="empty-state">Paste a unified diff or click any demo scenario above to test the reviewer.</p>';
-      resultsCount.textContent = 'Found 0 issue(s)';
-      engineBadge.textContent = 'Engine: Ready';
-      metricCard.style.display = 'none';
-      categoryBar.style.display = 'none';
-      filterBar.style.display = 'none';
-      currentFindings = [];
-    };
-
-    fetchPrBtn.onclick = async () => {
-      const prUrl = prUrlInput.value.trim();
-      if (!prUrl) return alert('Please enter a GitHub PR URL');
-
-      fetchPrBtn.textContent = 'Fetching...';
-      fetchPrBtn.disabled = true;
-
-      try {
-        const res = await fetch('/api/fetch-pr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prUrl })
-        });
-        const data = await res.json();
-        if (data.error) alert(data.error);
-        else diffInput.value = data.diff;
-      } catch (err) {
-        alert('Failed to connect to backend server.');
-      } finally {
-        fetchPrBtn.textContent = 'Fetch PR Diff';
-        fetchPrBtn.disabled = false;
-      }
-    };
-
-    window.copyAutoFix = function(idx) {
-      const item = currentFindings[idx];
-      if (!item || !item.suggestedCode) return;
-      navigator.clipboard.writeText(item.suggestedCode).then(() => {
-        const btn = document.getElementById(`fix-btn-${idx}`);
-        if (btn) {
-          const original = btn.textContent;
-          btn.textContent = '✅ Copied!';
-          setTimeout(() => btn.textContent = original, 1800);
-        }
-      });
-    };
-
-    function renderFindings() {
-      const filtered = currentFilter === 'ALL'
-        ? currentFindings
-        : currentFindings.filter(f => (f.severity || 'SUGGESTION').toUpperCase() === currentFilter);
-
-      if (filtered.length === 0) {
-        resultsList.innerHTML = `<p class="empty-state">No issues matching "${currentFilter}" filter.</p>`;
-        return;
-      }
-
-      resultsList.innerHTML = filtered.map((item, index) => `
-        <div class="review-card ${(item.severity || 'suggestion').toLowerCase()}">
-          <div class="card-header">
-            <div class="header-tags">
-              <span class="severity-tag ${(item.severity || 'suggestion').toLowerCase()}">${item.severity || 'SUGGESTION'}</span>
-              ${item.owasp ? `<span class="owasp-tag">${item.owasp}</span>` : ''}
-            </div>
-            <span class="file-tag">${item.file}:${item.line || '?'}</span>
-          </div>
-          <div class="card-body">
-            <p><strong>Issue:</strong> ${item.issue}</p>
-            <p><strong>Fix Recommendation:</strong> <code>${item.fix}</code></p>
-            ${item.suggestedCode ? `
-              <div class="autofix-box">
-                <div class="autofix-header">
-                  <span>⚡ Agent Suggested Safe Patch:</span>
-                  <button id="fix-btn-${index}" class="btn-copy-patch" onclick="copyAutoFix(${index})">Copy Fix</button>
-                </div>
-                <pre><code>${item.suggestedCode}</code></pre>
-              </div>
-            ` : ''}
-          </div>
-        </div>
-      `).join('');
+    function detectLanguage(source) {
+      const code = source.trim();
+      if (!code) return null;
+      const patterns = [
+        ['C', /#include\s*<(stdio|stdlib|string|stdbool)\.h>|\bprintf\s*\(|\bscanf\s*\(/],
+        ['C++', /#include\s*<(iostream|string|vector|map|memory|algorithm|fstream)>|\bstd::|\bcout\s*<<|\bcin\s*>>|\bnullptr\b|\btemplate\s*</],
+        ['Java', /\bpublic\s+class\s+\w+|\bSystem\.out\.(print|println)\s*\(|\bpublic\s+static\s+void\s+main\b/],
+        ['JavaScript', /\bconsole\.log\s*\(|\brequire\s*\(|\bmodule\.exports\b|\b(?:const|let|var)\s+\w+\s*=|=>|\bfunction\s+\w+\s*\(/],
+        ['TypeScript', /\b(interface|type)\s+\w+\s*=|:\s*(string|number|boolean)\b|\bas\s+(string|number)\b/],
+        ['Python', /(^|\n)\s*(def\s+\w+\s*\(|class\s+\w+\s*[:(]|if\s+__name__\s*==)|\bprint\s*\([^)]*\)\s*(?:\n|$)/],
+        ['Go', /\bpackage\s+main\b|\bfunc\s+\w+\s*\(|\bfmt\.Print/],
+        ['Rust', /\bfn\s+main\s*\(|\blet\s+mut\s+|\bprintln!\s*\(/],
+        ['PHP', /<\?php|\becho\s+\$|\$[A-Za-z_]\w*\s*=/],
+        ['Ruby', /\bputs\s+|\bdef\s+\w+\s*\n|\bend\s*$/],
+        ['Swift', /\b(import\s+Foundation|func\s+\w+\s*\(|let\s+\w+\s*=.*\b(print|guard)\b)/],
+        ['Kotlin', /\bfun\s+main\s*\(|\bval\s+\w+\s*=|\bprintln\s*\(/]
+      ];
+      const match = patterns.find(([, pattern]) => pattern.test(code));
+      return match ? match[0] : null;
     }
 
-    reviewBtn.onclick = async () => {
-      const diff = diffInput.value.trim();
-      if (!diff) return alert('Please enter or paste a diff first.');
-
-      reviewBtn.textContent = 'Auditing...';
-      reviewBtn.disabled = true;
-      resultsList.innerHTML = '<p class="empty-state">Running security heuristic & model analysis...</p>';
-
-      try {
-        const res = await fetch('/api/review', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ diff, model: modelSelect.value })
-        });
-        const data = await res.json();
-
-        currentFindings = data.reviews || [];
-        engineBadge.textContent = `Engine: ${data.source}`;
-        resultsCount.textContent = `Found ${currentFindings.length} issue(s)`;
-
-        if (data.metrics) {
-          metricCard.style.display = 'flex';
-          scoreVal.textContent = `${data.metrics.score}/100`;
-          gradeVal.textContent = data.metrics.grade;
-          complianceVal.textContent = data.metrics.score >= 70 ? 'PASS' : 'FAIL';
-          complianceVal.style.color = data.metrics.score >= 70 ? '#4ade80' : '#f87171';
-
-          if (data.metrics.categories && Object.keys(data.metrics.categories).length > 0) {
-            categoryBar.style.display = 'flex';
-            categoryBar.innerHTML = Object.entries(data.metrics.categories).map(([cat, count]) => `
-              <span class="cat-pill">${cat}: <strong>${count}</strong></span>
-            `).join('');
-          } else {
-            categoryBar.style.display = 'none';
-          }
-        }
-
-        if (currentFindings.length === 0) {
-          resultsList.innerHTML = '<p class="empty-state" style="color: #4ade80;">✅ Clean PR! Zero security vulnerabilities detected.</p>';
-          filterBar.style.display = 'none';
-          return;
-        }
-
-        filterBar.style.display = 'flex';
-        currentFilter = 'ALL';
-        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-        document.querySelector('.filter-chip[data-filter="ALL"]').classList.add('active');
-        renderFindings();
-
-      } catch (err) {
-        resultsList.innerHTML = '<p class="empty-state" style="color: #f87171;">Error executing review.</p>';
-      } finally {
-        reviewBtn.textContent = 'Run Security Audit';
-        reviewBtn.disabled = false;
+    languageSelect.onchange = () => {
+      autoDetectLanguage = languageSelect.value === 'Auto-detect';
+      customLanguageInput.hidden = languageSelect.value !== 'Other';
+      if (!customLanguageInput.hidden) customLanguageInput.focus();
+      if (!autoDetectLanguage && languageSelect.value !== 'Other') {
+        languageHint.textContent = `Language selected: ${languageSelect.value}`;
       }
     };
 
-    document.querySelectorAll('.filter-chip').forEach(chip => {
-      chip.onclick = () => {
-        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        currentFilter = chip.dataset.filter;
-        renderFindings();
-      };
+    codeInput.addEventListener('input', () => {
+      if (!autoDetectLanguage) return;
+      const detected = detectLanguage(codeInput.value);
+      if (detected) {
+        languageSelect.value = detected;
+        languageHint.textContent = `Detected language: ${detected}`;
+      } else {
+        languageSelect.value = 'Auto-detect';
+        languageHint.textContent = codeInput.value.trim()
+          ? 'Could not identify the language from these code patterns. Choose it from the list.'
+          : 'Language will be detected when you paste code.';
+      }
     });
 
-    copyMdBtn.onclick = () => {
-      if (currentFindings.length === 0) return;
-      let md = `### 🔍 Open PR Reviewer Security Audit\n\n`;
-      md += `| File | Line | OWASP Tag | Severity | Issue | Recommended Fix |\n`;
-      md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
-      currentFindings.forEach(f => {
-        md += `| \`${f.file}\` | ${f.line || 'N/A'} | ${f.owasp || 'N/A'} | **${f.severity}** | ${f.issue} | ${f.fix} |\n`;
-      });
-      md += `\n*Audited offline via Open PR Reviewer (Agent Skills Compliant)*`;
-      navigator.clipboard.writeText(md).then(() => {
-        const orig = copyMdBtn.textContent;
-        copyMdBtn.textContent = '✅ Copied!';
-        setTimeout(() => copyMdBtn.textContent = orig, 1800);
-      });
+    const languageByExtension = {
+      c: 'C', h: 'C', cc: 'C++', cpp: 'C++', cxx: 'C++', hpp: 'C++', hxx: 'C++',
+      js: 'JavaScript', jsx: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript',
+      ts: 'TypeScript', tsx: 'TypeScript', py: 'Python', java: 'Java', cs: 'C#',
+      go: 'Go', rs: 'Rust', php: 'PHP', rb: 'Ruby', swift: 'Swift', kt: 'Kotlin',
+      kts: 'Kotlin', scala: 'Scala', sc: 'Scala', dart: 'Dart', r: 'R', pl: 'Perl',
+      sql: 'SQL', html: 'HTML', css: 'CSS', sh: 'Bash'
     };
 
-    exportJsonBtn.onclick = () => {
-      const blob = new Blob([JSON.stringify(currentFindings, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pr-audit-${Date.now()}.json`;
-      a.click();
+    codeFileInput.addEventListener('change', async () => {
+      const file = codeFileInput.files[0];
+      if (!file) return;
+      if (file.size > 8 * 1024 * 1024) {
+        uploadStatus.textContent = 'This file is too large. Please choose a file smaller than 8 MB.';
+        codeFileInput.value = '';
+        return;
+      }
+      uploadStatus.textContent = `Reading ${file.name}...`;
+      try {
+        const source = await file.text();
+        const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+        const language = languageByExtension[extension] || detectLanguage(source);
+        codeInput.value = source;
+        autoDetectLanguage = false;
+        if (language && [...languageSelect.options].some(option => option.value === language || option.text === language)) {
+          languageSelect.value = language;
+          customLanguageInput.hidden = true;
+        } else {
+          languageSelect.value = 'Other';
+          customLanguageInput.hidden = false;
+          customLanguageInput.value = language || (extension ? `.${extension}` : 'Unknown');
+        }
+        const selectedLanguage = language || customLanguageInput.value;
+        languageHint.textContent = `Language from file: ${selectedLanguage}`;
+        uploadStatus.textContent = `${file.name} loaded. The check is running; see the result on the right.`;
+        document.getElementById('checkCodeBtn').click();
+      } catch (error) {
+        uploadStatus.textContent = `Could not read the selected file: ${error.message}`;
+      }
+    });
+
+    document.getElementById('checkCodeBtn').onclick = async () => {
+      const button = document.getElementById('checkCodeBtn');
+      const result = document.getElementById('codeCheckResult');
+      const code = codeInput.value;
+      const language = languageSelect.value === 'Other'
+        ? customLanguageInput.value.trim()
+        : languageSelect.value === 'Auto-detect'
+          ? detectLanguage(code)
+          : languageSelect.value;
+      if (!code.trim() || !language) {
+        result.textContent = 'Enter both a programming language and code.';
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Checking...';
+      result.textContent = 'Checking code with local syntax tools...';
+      try {
+        const response = await fetch('/api/check-code', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, language, model: document.getElementById('modelSelect').value })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Code check failed.');
+        if (data.status === 'pass') {
+          result.innerHTML = `<strong class="pass-result">PASS · ${data.score}/100</strong><p>${escapeHtml(data.message || 'No clear programming errors found.')}</p><p class="result-source">Checked by ${escapeHtml(data.source || 'local model')}</p>`;
+        } else {
+          result.innerHTML = `<strong class="error-result">ERRORS FOUND · ${data.issues.length}</strong><p class="result-source">Checked by ${escapeHtml(data.source || 'local model')}</p>` + data.issues.map(issue =>
+            `<article class="code-issue"><strong>Line ${escapeHtml(issue.line ?? '?')}:</strong> ${escapeHtml(issue.message)}${issue.fix ? `<p><strong>Suggested fix:</strong> <code>${escapeHtml(issue.fix)}</code></p>` : ''}</article>`
+          ).join('');
+        }
+      } catch (error) {
+        result.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Check Code';
+      }
     };
+
   </script>
 </body>
 </html>

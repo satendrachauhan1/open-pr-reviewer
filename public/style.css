@@ -16,6 +16,111 @@ body {
   margin: 0 auto;
 }
 
+.code-check {
+  margin: 0;
+}
+
+.upload-description {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.upload-dropzone {
+  min-height: 260px;
+  border: 2px dashed #475569;
+  border-radius: 10px;
+  background: #0b1324;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.upload-dropzone:hover,
+.file-input:focus + .upload-dropzone {
+  border-color: #38bdf8;
+  background: #101c31;
+}
+
+.upload-dropzone strong { color: #f8fafc; font-size: 1.05rem; }
+.upload-dropzone span:last-child { color: #94a3b8; font-size: 0.8rem; }
+.upload-icon { font-size: 2.25rem; color: #38bdf8; line-height: 1; }
+.upload-status { margin-top: 1rem; color: #94a3b8; font-size: 0.85rem; }
+
+
+.language-input {
+  width: min(100%, 420px);
+  background: #020617;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f8fafc;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 1rem;
+}
+
+select.language-input { cursor: pointer; }
+select.language-input option { background: #020617; color: #f8fafc; }
+
+.code-label {
+  margin-bottom: 0.5rem;
+}
+
+.code-check .code-input {
+  min-height: 220px;
+}
+
+.language-hint {
+  align-self: flex-start;
+  background: #0b1324;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  color: #a5b4c8;
+  display: inline-flex;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  margin: 0 0 1rem;
+  max-width: 100%;
+  min-height: 2rem;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.75rem;
+  flex: none;
+}
+
+.code-label { display: block; }
+
+.code-check-result {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #cbd5e1;
+  overflow-wrap: anywhere;
+}
+
+.code-check-result p { margin-top: 0.5rem; }
+.result-source { color: #94a3b8; font-size: 0.8rem; }
+.pass-result { color: #4ade80; }
+.error-result { color: #f87171; }
+.code-issue { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #334155; }
+.code-issue code { white-space: pre-wrap; }
+
 header {
   display: flex;
   justify-content: space-between;
