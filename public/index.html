@@ -3,117 +3,358 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Open PR Reviewer</title>
+  <title>Open PR Reviewer - Offline AI Agent Skill</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>🔍 Open PR Reviewer</h1>
-      <p class="subtitle">Offline-First AI Code Review Agent for Hacktoberfest Track 1</p>
+      <div class="header-left">
+        <h1>🔍 Open PR Reviewer</h1>
+        <p class="subtitle">Offline-First AI Code Review Agent for Hacktoberfest Track 1</p>
+      </div>
+      <div class="header-right">
+        <label for="modelSelect">Agent Engine / Model:</label>
+        <select id="modelSelect">
+          <option value="codellama:7b">CodeLlama (7B) - Default</option>
+          <option value="qwen2.5-coder:7b">Qwen 2.5 Coder (7B)</option>
+          <option value="deepseek-coder:6.7b">DeepSeek Coder (6.7B)</option>
+          <option value="mistral:7b">Mistral (7B)</option>
+        </select>
+      </div>
     </header>
 
-    <main class="review-panel">
-      <div class="input-section">
-        <label for="diffInput">Paste Git Unified Diff:</label>
-        <textarea id="diffInput" placeholder="diff --git a/backend/db.js b/backend/db.js..."></textarea>
-        
-        <div class="controls">
-          <button id="sampleBtn" type="button" class="btn-secondary">Load Sample Diff</button>
-          <button id="submitBtn" type="button" class="btn-primary">Review PR Offline</button>
-        </div>
-      </div>
+    <!-- Public GitHub PR Fetcher Bar -->
+    <div class="fetch-bar">
+      <input type="text" id="prUrlInput" placeholder="Enter public GitHub PR URL (e.g., https://github.com/torvalds/linux/pull/123)" />
+      <button id="fetchPrBtn" class="btn secondary">Fetch PR Diff</button>
+    </div>
 
-      <div class="output-section">
-        <div class="status-bar">
-          <span id="statusText">Awaiting input...</span>
-          <span id="badge" class="badge"></span>
+    <!-- Judge Scenarios Bar -->
+    <div class="scenario-bar">
+      <span><strong>Judge Demo Scenarios:</strong></span>
+      <button class="btn-chip" id="demoSecLeak">Scenario 1: Credential & Key Leaks</button>
+      <button class="btn-chip" id="demoSqlRce">Scenario 2: SQL Injection & Eval RCE</button>
+      <button class="btn-chip" id="demoCBuffer">Scenario 3: C/C++ Buffer Overflow & Memory</button>
+      <button class="btn-chip" id="demoSensitive">Scenario 4: Sensitive File (.env)</button>
+      <button class="btn-chip" id="demoClean">Scenario 5: Clean PR (Zero Issues)</button>
+    </div>
+
+    <main class="grid">
+      <!-- Input Panel -->
+      <section class="panel">
+        <div class="panel-header">
+          <label for="diffInput">Git Unified Diff:</label>
+          <button id="clearBtn" class="btn-text">Clear</button>
         </div>
-        <div id="resultsContainer" class="results-list"></div>
-      </div>
+        <textarea id="diffInput" placeholder="Paste unified git diff here (e.g. git diff main...feature)"></textarea>
+        <div class="actions">
+          <button id="reviewBtn" class="btn primary">Run Security Audit</button>
+        </div>
+      </section>
+
+      <!-- Results Panel -->
+      <section class="panel">
+        <div class="panel-header">
+          <span id="resultsCount">Found 0 issue(s)</span>
+          <span id="engineBadge" class="badge">Engine: Ready</span>
+        </div>
+
+        <!-- Security Metric Scorecard -->
+        <div class="metric-card" id="metricCard" style="display: none;">
+          <div class="metric-box">
+            <span class="metric-label">Security Score</span>
+            <span class="metric-value" id="scoreVal">100/100</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Risk Grade</span>
+            <span class="metric-value" id="gradeVal">A+</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Compliance</span>
+            <span class="metric-value" id="complianceVal">Pass</span>
+          </div>
+        </div>
+
+        <!-- Category Distribution Pill Bar -->
+        <div id="categoryBar" class="category-pills" style="display: none;"></div>
+
+        <!-- Filter Chips & Export Actions -->
+        <div class="filter-bar" id="filterBar" style="display: none;">
+          <div class="chips">
+            <button class="filter-chip active" data-filter="ALL">All</button>
+            <button class="filter-chip" data-filter="CRITICAL">Critical</button>
+            <button class="filter-chip" data-filter="WARNING">Warning</button>
+            <button class="filter-chip" data-filter="SUGGESTION">Suggestions</button>
+          </div>
+          <div class="export-actions">
+            <button id="copyMdBtn" class="btn-text">📋 Copy Markdown</button>
+            <button id="exportJsonBtn" class="btn-text">💾 Export JSON</button>
+          </div>
+        </div>
+
+        <!-- Issues List -->
+        <div id="resultsList" class="results-list">
+          <p class="empty-state">Paste a unified diff or click any demo scenario above to test the reviewer.</p>
+        </div>
+      </section>
     </main>
   </div>
 
   <script>
-    const sampleDiff = `diff --git a/server/db.js b/server/db.js
---- a/server/db.js
-+++ b/server/db.js
-@@ -12,3 +12,4 @@
- function getUser(userId) {
--  return db.query('SELECT * FROM users WHERE id = $1', [userId]);
-+  const apiKey = "sk_live_998877665544332211";
-+  return db.query(\`SELECT * FROM users WHERE id = '\${userId}'\`);
- }`;
+    const scenarios = {
+      leak: `diff --git a/config/auth.js b/config/auth.js
+--- a/config/auth.js
++++ b/config/auth.js
+@@ -5,2 +5,4 @@
+- const token = process.env.AUTH_SECRET;
++ const apiKey = "sk_live_998877665544332211";
++ const awsKey = "AKIAIOSFODNN7EXAMPLE";
++ const privateKey = "-----BEGIN RSA PRIVATE KEY-----";`,
+
+      sqlRce: `diff --git a/server/routes.js b/server/routes.js
+--- a/server/routes.js
++++ b/server/routes.js
+@@ -10,3 +10,5 @@ router.post('/login', (req, res) => {
+- const query = db.query('SELECT * FROM users WHERE email = $1', [req.body.email]);
++ const query = db.query("SELECT * FROM users WHERE email = '" + req.body.email + "'");
++ const execHandler = eval(req.body.customScript);
++ res.setHeader('Access-Control-Allow-Origin', '*');
++ res.json({ status: 'ok' });
+});`,
+
+      cBuffer: `diff --git a/src/ds/linked_list.c b/src/ds/linked_list.c
+--- a/src/ds/linked_list.c
++++ b/src/ds/linked_list.c
+@@ -23,6 +23,8 @@ bool list_push_front(LinkedList *list, int val) {
+     Node *new_node = (Node *)malloc(sizeof(Node));
++    char debug_tag[16];
++    sprintf(debug_tag, "node_val_%d_with_long_prefix", val);
++    free(new_node);
+     new_node->data = val;`,
+
+      sensitive: `diff --git a/.env b/.env
+new file mode 100644
+--- /dev/null
++++ b/.env
+@@ -0,0 +1,3 @@
++DB_PASSWORD=SuperSecretDatabasePass123!
++JWT_SECRET=production_jwt_signing_secret_998273
++PORT=5000`,
+
+      clean: `diff --git a/src/ds/linked_list.c b/src/ds/linked_list.c
+--- a/src/ds/linked_list.c
++++ b/src/ds/linked_list.c
+@@ -23,4 +23,6 @@ bool list_push_front(LinkedList *list, int val) {
++    Node *new_node = (Node *)malloc(sizeof(Node));
++    if (!new_node) return false;
+     new_node->data = val;
++    new_node->next = list->head;
++    list->head = new_node;`
+    };
 
     const diffInput = document.getElementById('diffInput');
-    const submitBtn = document.getElementById('submitBtn');
-    const sampleBtn = document.getElementById('sampleBtn');
-    const statusText = document.getElementById('statusText');
-    const badge = document.getElementById('badge');
-    const resultsContainer = document.getElementById('resultsContainer');
+    const prUrlInput = document.getElementById('prUrlInput');
+    const reviewBtn = document.getElementById('reviewBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const fetchPrBtn = document.getElementById('fetchPrBtn');
+    const modelSelect = document.getElementById('modelSelect');
+    const engineBadge = document.getElementById('engineBadge');
+    const resultsCount = document.getElementById('resultsCount');
+    const resultsList = document.getElementById('resultsList');
+    const metricCard = document.getElementById('metricCard');
+    const categoryBar = document.getElementById('categoryBar');
+    const scoreVal = document.getElementById('scoreVal');
+    const gradeVal = document.getElementById('gradeVal');
+    const complianceVal = document.getElementById('complianceVal');
+    const filterBar = document.getElementById('filterBar');
+    const copyMdBtn = document.getElementById('copyMdBtn');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
 
-    sampleBtn.addEventListener('click', () => {
-      diffInput.value = sampleDiff;
-    });
+    let currentFindings = [];
+    let currentFilter = 'ALL';
 
-    submitBtn.addEventListener('click', async () => {
-      const diff = diffInput.value.trim();
-      if (!diff) {
-        alert('Please enter or paste a git diff first.');
+    document.getElementById('demoSecLeak').onclick = () => { diffInput.value = scenarios.leak; };
+    document.getElementById('demoSqlRce').onclick = () => { diffInput.value = scenarios.sqlRce; };
+    document.getElementById('demoCBuffer').onclick = () => { diffInput.value = scenarios.cBuffer; };
+    document.getElementById('demoSensitive').onclick = () => { diffInput.value = scenarios.sensitive; };
+    document.getElementById('demoClean').onclick = () => { diffInput.value = scenarios.clean; };
+
+    clearBtn.onclick = () => {
+      diffInput.value = '';
+      prUrlInput.value = '';
+      resultsList.innerHTML = '<p class="empty-state">Paste a unified diff or click any demo scenario above to test the reviewer.</p>';
+      resultsCount.textContent = 'Found 0 issue(s)';
+      engineBadge.textContent = 'Engine: Ready';
+      metricCard.style.display = 'none';
+      categoryBar.style.display = 'none';
+      filterBar.style.display = 'none';
+      currentFindings = [];
+    };
+
+    fetchPrBtn.onclick = async () => {
+      const prUrl = prUrlInput.value.trim();
+      if (!prUrl) return alert('Please enter a GitHub PR URL');
+
+      fetchPrBtn.textContent = 'Fetching...';
+      fetchPrBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/fetch-pr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prUrl })
+        });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+        else diffInput.value = data.diff;
+      } catch (err) {
+        alert('Failed to connect to backend server.');
+      } finally {
+        fetchPrBtn.textContent = 'Fetch PR Diff';
+        fetchPrBtn.disabled = false;
+      }
+    };
+
+    window.copyAutoFix = function(idx) {
+      const item = currentFindings[idx];
+      if (!item || !item.suggestedCode) return;
+      navigator.clipboard.writeText(item.suggestedCode).then(() => {
+        const btn = document.getElementById(`fix-btn-${idx}`);
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = '✅ Copied!';
+          setTimeout(() => btn.textContent = original, 1800);
+        }
+      });
+    };
+
+    function renderFindings() {
+      const filtered = currentFilter === 'ALL'
+        ? currentFindings
+        : currentFindings.filter(f => (f.severity || 'SUGGESTION').toUpperCase() === currentFilter);
+
+      if (filtered.length === 0) {
+        resultsList.innerHTML = `<p class="empty-state">No issues matching "${currentFilter}" filter.</p>`;
         return;
       }
 
-      submitBtn.disabled = true;
-      statusText.textContent = 'Analyzing diff locally...';
-      badge.textContent = '';
-      badge.className = 'badge';
-      resultsContainer.innerHTML = '';
+      resultsList.innerHTML = filtered.map((item, index) => `
+        <div class="review-card ${(item.severity || 'suggestion').toLowerCase()}">
+          <div class="card-header">
+            <div class="header-tags">
+              <span class="severity-tag ${(item.severity || 'suggestion').toLowerCase()}">${item.severity || 'SUGGESTION'}</span>
+              ${item.owasp ? `<span class="owasp-tag">${item.owasp}</span>` : ''}
+            </div>
+            <span class="file-tag">${item.file}:${item.line || '?'}</span>
+          </div>
+          <div class="card-body">
+            <p><strong>Issue:</strong> ${item.issue}</p>
+            <p><strong>Fix Recommendation:</strong> <code>${item.fix}</code></p>
+            ${item.suggestedCode ? `
+              <div class="autofix-box">
+                <div class="autofix-header">
+                  <span>⚡ Agent Suggested Safe Patch:</span>
+                  <button id="fix-btn-${index}" class="btn-copy-patch" onclick="copyAutoFix(${index})">Copy Fix</button>
+                </div>
+                <pre><code>${item.suggestedCode}</code></pre>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    reviewBtn.onclick = async () => {
+      const diff = diffInput.value.trim();
+      if (!diff) return alert('Please enter or paste a diff first.');
+
+      reviewBtn.textContent = 'Auditing...';
+      reviewBtn.disabled = true;
+      resultsList.innerHTML = '<p class="empty-state">Running security heuristic & model analysis...</p>';
 
       try {
-        const response = await fetch('/api/review', {
+        const res = await fetch('/api/review', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ diff })
+          body: JSON.stringify({ diff, model: modelSelect.value })
         });
+        const data = await res.json();
 
-        const data = await response.json();
+        currentFindings = data.reviews || [];
+        engineBadge.textContent = `Engine: ${data.source}`;
+        resultsCount.textContent = `Found ${currentFindings.length} issue(s)`;
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Review request failed');
+        if (data.metrics) {
+          metricCard.style.display = 'flex';
+          scoreVal.textContent = `${data.metrics.score}/100`;
+          gradeVal.textContent = data.metrics.grade;
+          complianceVal.textContent = data.metrics.score >= 70 ? 'PASS' : 'FAIL';
+          complianceVal.style.color = data.metrics.score >= 70 ? '#4ade80' : '#f87171';
+
+          if (data.metrics.categories && Object.keys(data.metrics.categories).length > 0) {
+            categoryBar.style.display = 'flex';
+            categoryBar.innerHTML = Object.entries(data.metrics.categories).map(([cat, count]) => `
+              <span class="cat-pill">${cat}: <strong>${count}</strong></span>
+            `).join('');
+          } else {
+            categoryBar.style.display = 'none';
+          }
         }
 
-        const reviewsList = Array.isArray(data.reviews) ? data.reviews : [];
-
-        badge.textContent = `Engine: ${data.source}`;
-        badge.className = 'badge active';
-        statusText.textContent = `Found ${reviewsList.length} issue(s):`;
-
-        if (reviewsList.length === 0) {
-          resultsContainer.innerHTML = '<div class="card clean">✔ No issues detected. Clean diff!</div>';
-        } else {
-          reviewsList.forEach(item => {
-            const card = document.createElement('div');
-            card.className = `card ${item.severity ? item.severity.toLowerCase() : 'suggestion'}`;
-            card.innerHTML = `
-              <div class="card-header">
-                <span class="sev-tag">${item.severity || 'ISSUE'}</span>
-                <span class="file-path">${item.file || 'unknown'}:${item.line || '?'}</span>
-              </div>
-              <div class="card-body">
-                <p class="issue"><strong>Issue:</strong> ${item.issue || JSON.stringify(item)}</p>
-                <p class="fix"><strong>Fix:</strong> <code>${item.fix || item.suggestion || 'Review manually'}</code></p>
-              </div>
-            `;
-            resultsContainer.appendChild(card);
-          });
+        if (currentFindings.length === 0) {
+          resultsList.innerHTML = '<p class="empty-state" style="color: #4ade80;">✅ Clean PR! Zero security vulnerabilities detected.</p>';
+          filterBar.style.display = 'none';
+          return;
         }
+
+        filterBar.style.display = 'flex';
+        currentFilter = 'ALL';
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        document.querySelector('.filter-chip[data-filter="ALL"]').classList.add('active');
+        renderFindings();
+
       } catch (err) {
-        statusText.textContent = 'Error occurred during review.';
-        resultsContainer.innerHTML = `<div class="card critical">${err.message}</div>`;
+        resultsList.innerHTML = '<p class="empty-state" style="color: #f87171;">Error executing review.</p>';
       } finally {
-        submitBtn.disabled = false;
+        reviewBtn.textContent = 'Run Security Audit';
+        reviewBtn.disabled = false;
       }
+    };
+
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.onclick = () => {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        currentFilter = chip.dataset.filter;
+        renderFindings();
+      };
     });
+
+    copyMdBtn.onclick = () => {
+      if (currentFindings.length === 0) return;
+      let md = `### 🔍 Open PR Reviewer Security Audit\n\n`;
+      md += `| File | Line | OWASP Tag | Severity | Issue | Recommended Fix |\n`;
+      md += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+      currentFindings.forEach(f => {
+        md += `| \`${f.file}\` | ${f.line || 'N/A'} | ${f.owasp || 'N/A'} | **${f.severity}** | ${f.issue} | ${f.fix} |\n`;
+      });
+      md += `\n*Audited offline via Open PR Reviewer (Agent Skills Compliant)*`;
+      navigator.clipboard.writeText(md).then(() => {
+        const orig = copyMdBtn.textContent;
+        copyMdBtn.textContent = '✅ Copied!';
+        setTimeout(() => copyMdBtn.textContent = orig, 1800);
+      });
+    };
+
+    exportJsonBtn.onclick = () => {
+      const blob = new Blob([JSON.stringify(currentFindings, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pr-audit-${Date.now()}.json`;
+      a.click();
+    };
   </script>
 </body>
 </html>
